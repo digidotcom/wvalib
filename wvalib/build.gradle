@@ -1,0 +1,218 @@
+buildscript {
+    dependencies {
+        classpath 'com.github.dcendents:android-maven-plugin:1.1'
+        classpath 'org.apache.maven.wagon:wagon-http:2.2'
+    }
+    // Based on https://github.com/Netflix/gradle-template build.gradle
+    apply from: file('../gradle/buildscript.gradle'), to: buildscript
+}
+
+apply plugin: 'com.android.library'
+apply plugin: 'maven'
+apply plugin: 'android-maven'
+
+// High-level project settings
+project.ext {
+    /*
+        Builds are snapshot versions, unless the property 'release' is set.
+        For example:
+            $ ./gradlew -P release :wvalib:clean :wvalib:uploadArchives
+    */
+    isRelease = project.hasProperty("release")
+
+    versionSuffix = isRelease ? "" : "-SNAPSHOT"
+
+    maven = [
+        repo: isRelease ? mavenReleases : mavenSnapshots,
+        username: isRelease ? mavenReleasesUsername : mavenSnapshotsUsername,
+        password: isRelease ? mavenReleasesPassword : mavenSnapshotsPassword
+    ]
+}
+
+import groovy.io.FileType
+
+version '2.0' + versionSuffix
+group 'com.digi.wva'
+
+dependencies {
+    compile 'com.squareup.okio:okio:1.0.0'
+    compile 'com.squareup.okhttp:okhttp:2.0.0'
+    compile 'joda-time:joda-time:2.2'
+
+    // Testing dependencies
+    androidTestCompile files('libs/dexmaker-1.0.jar')
+    androidTestCompile files('libs/dexmaker-mockito-1.0.jar')
+    androidTestCompile files('libs/mockito-all-1.9.5.jar')
+    androidTestCompile files('libs/mockwebserver-2.0.0.jar')
+}
+
+android {
+    compileSdkVersion 20
+    buildToolsVersion "20"
+
+    defaultConfig {
+        minSdkVersion 9
+        targetSdkVersion 20
+
+        testApplicationId "com.digi.wva.test"
+        testInstrumentationRunner "com.digi.wva.WVATestRunner"
+        testHandleProfiling true
+        testFunctionalTest true
+    }
+
+    // Don't publish the AAR file for this library. (The JAR is sufficient.)
+    defaultPublishConfig null
+
+    buildTypes.debug {
+        testCoverageEnabled true
+    }
+
+    libraryVariants.all { variant ->
+        // Don't create generateDebugDocs tasks
+        if (variant.buildType.name == "debug")
+            return;
+
+        String variantName = variant.name.capitalize()
+        String taskName = "generate${variantName}Docs"
+        String jarTask = "${taskName}Jar"
+
+        def doclinks = [
+            "http://docs.oracle.com/javase/7/docs/api/", // Java APIs,
+            "http://square.github.io/okhttp/javadoc/",   // OkHttp docs,
+            "http://www.json.org/javadoc/",              // org.json docs
+            "http://joda-time.sourceforge.net/apidocs/"  // JodaTime docs
+        ];
+
+        task (taskName, type: Javadoc) {
+            description "Generate Javadoc for $variant.name"
+            source = fileTree('src/main/java').matching {
+                include '**/*.java'
+                // Exclude the com.digi.wva.internal package from the Javadocs.
+                exclude 'com/digi/wva/internal'
+            }
+            ext.androidJar = "${android.sdkDirectory}/platforms/${android.compileSdkVersion}/android.jar"
+
+            // src/main/java needs to be on the classpath because the internal subpackage is needed
+            // for doc compilation, even though it is excluded from the source option
+            classpath = files(variant.javaCompile.classpath.files) + files(ext.androidJar) + files('src/main/java')
+
+            options.header "<strong>Digi WVA Android Library<br>version ${version}</strong>"
+
+            options.windowTitle "Digi WVA Android Library (wvalib) v${version} API Docs"
+            title = options.windowTitle
+
+            options.overview = new File("${project.projectDir}/src/main/java/overview.html")
+
+            options.links(*doclinks);
+            options.linksOffline("http://d.android.com/reference/",
+                    "${android.sdkDirectory}/platforms/${android.compileSdkVersion}/android.jar");
+
+            exclude '**/BuildConfig.java'
+            exclude '**/R.java'
+
+            options.use true
+
+            doLast {
+                // Make all the external Javadoc references open in new windows.
+                // http://stackoverflow.com/a/3954639 (recursively finding files)
+                // http://blog.davidehringer.com/groovy/processing-files-place-groovy/
+
+                destinationDir.eachFileRecurse (FileType.FILES) { file ->
+                    if (file.name.endsWith(".html")) { // Only edit html files
+                        def text = file.text
+                        file.write(text.replaceAll("href=\"(.+)is-external=true\"") {
+                            Object[] match -> "href=\"${match[1]}is-external=true\" target=\"_blank\""})
+                    }
+                }
+            }
+        }
+
+        task(jarTask, type: Jar, dependsOn: "${taskName}") {
+            classifier = 'javadoc'
+            from tasks."${taskName}".destinationDir
+
+            artifacts {
+                // Add the Javadocs to the artifacts list.
+                archives tasks."${jarTask}"
+            }
+        }
+
+        task("generate${variantName}SourcesJar", type: Jar, dependsOn: variant.javaCompile) {
+            classifier = 'sources'
+            from variant.javaCompile.source
+
+            artifacts {
+                archives tasks."generate${variantName}SourcesJar"
+            }
+        }
+
+        task("generate${variantName}Jar", type: Jar, dependsOn: variant.javaCompile) {
+            from variant.javaCompile.destinationDir
+
+            artifacts {
+                archives tasks."generate${variantName}Jar"
+            }
+        }
+    }
+}
+
+task makeEclipseProject(type: Copy) {
+    destinationDir = new File("$project.buildDir/outputs/eclipse-project")
+
+    doFirst {
+        destinationDir.mkdirs()
+    }
+
+    from ('src/main') {
+        include 'AndroidManifest.xml'
+    }
+    from (project.projectDir) {
+        include 'lint.xml'
+        include 'proguard-project.txt'
+        include 'project.properties'
+    }
+    // Copy static pre-generated files
+    from '../gradle/assets/eclipse-project'
+
+    into ("src") {
+        from 'src/main/java'
+    }
+
+    into ("libs") {
+        from 'libs'
+    }
+}
+
+uploadArchives {
+  repositories {
+    mavenDeployer {
+      // Edit gradle.properties to specify the repository and
+      // authentication for the releases and snapshots repositories.
+      //
+      // Specify the 'release' property either in gradle.properties or on
+      // the command-line (gradle -P release :wvalib:clean :wvalib:uploadArchives) to
+      // upload to the releases repository - otherwise, the snapshots
+      // repository will be used.
+      repository(url: project.maven.repo) {
+        authentication(userName: project.maven.username, password: project.maven.password)
+      }
+
+      pom.project {
+        name 'WVA Android Library'
+        artifactId 'wvalib'
+        packaging 'jar'
+        organization {
+          name 'Digi International, Inc.'
+          url 'http://www.digi.com'
+        }
+        licenses {
+          license {
+            name "Mozilla Public License 2.0"
+            url 'http://mozilla.org/MPL/2.0'
+            distribution 'repo'
+          }
+        }
+      }
+    }
+  }
+}

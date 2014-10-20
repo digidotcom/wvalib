@@ -1,0 +1,52 @@
+<HTML>
+<BODY>
+<style>
+    .footer ul li {
+    font-size: 1em!important;
+    }
+</style>
+The Digi WVA Android Library makes it easy to interact with a
+<a href="http://www.digi.com/wva" target="_blank">Wireless Vehicle Bus Adapter (WVA)</a>
+from an Android application.
+
+<p>
+    The starting point for using this library is to
+    {@link com.digi.wva.WVA instantiate the WVA class}. Using methods available
+    on the WVA object, you can, among other things:
+
+<ul>
+    <li>
+        {@link com.digi.wva.WVA#setTime Set the time} on the WVA;
+    </li>
+    <li>
+        {@link com.digi.wva.WVA#getConfiguration Query} and {@link
+        com.digi.wva.WVA#configure set}
+        configuration values;
+    </li>
+    <li>
+        Query {@link com.digi.wva.WVA#fetchVehicleData vehicle} and
+        {@link com.digi.wva.WVA#fetchFaultCode fault code} data;
+    </li>
+    <li>
+        Subscribe to
+        {@link com.digi.wva.WVA#subscribeToVehicleData(String, int,
+        com.digi.wva.async.WvaCallback) vehicle} and
+        {@link com.digi.wva.WVA#subscribeToFaultCodes fault code} data;
+    </li>
+    <li>
+        Create alarms on
+        {@link com.digi.wva.WVA#createVehicleDataAlarm(String, com.digi.wva.async.AlarmType,
+        float, int, com.digi.wva.async.WvaCallback) vehicle}
+        and
+        {@link com.digi.wva.WVA#createFaultCodeAlarm fault code}
+        data;
+    </li>
+    <li>
+        and {@link com.digi.wva.WVA#connectEventChannel(int,
+        com.digi.wva.async.EventChannelStateListener)
+        connect to the TCP event channel}.
+    </li>
+</ul>
+</p>
+</BODY>
+</HTML>

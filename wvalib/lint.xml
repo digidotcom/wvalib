@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lint>
+    <issue id="InvalidPackage">
+        <ignore regexp="okio-1.0.0.jar" />
+    </issue>
+    <!-- Keep Android Studio from complaining about the uploadArchives task structure -->
+    <issue id="MisplacedStatement" severity="ignore">
+        <ignore path="repositories" />
+    </issue>
+</lint>
