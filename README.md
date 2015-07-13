@@ -15,6 +15,25 @@ with the web services of a Digi [Wireless Vehicle Bus Adapter][WVA]
 [Digi]: http://www.digi.com
 [WVA]: http://www.digi.com/products/wireless-vehicle-bus-adapter/wireless-vehicle-bus-adapter#overview
 
+
+Support and Contributing
+------------------------
+
+Contributions to the project are very welcome. Please submit any issues you
+find to the [GitHub issue tracker][issues]. If you have a change you would like
+to have included in the library, please open a pull request against the
+`develop` branch.
+
+Library code on the `master` branch is of release quality and has been
+code-reviewed and quality tested at the time of release. Any code added to the
+repository between official releases can be found on the `develop` branch; code
+on this branch has been code-reviewed but has not necessarily been fully
+tested - use this at your own discretion.
+
+[issues]: https://github.com/digidotcom/wvalib/issues
+
+---
+
 Requirements
 ------------
 
@@ -30,6 +49,27 @@ You will need:
 
 Installation
 ------------
+
+### Adding to an existing Gradle project
+
+To import this library into an existing Android Gradle project, add the
+following line to the `dependencies` section of your `build.gradle` file:
+
+    compile 'com.digi.wva:wvalib:2.0+'
+
+### Adding to an Eclipse project
+
+Before you can build the library you must point to the location of the
+Android SDK by setting your `ANDROID_HOME` environment variable or
+creating a `local.properties` file and setting the `sdk.dir` property.
+
+Next, navigate to the root directory of this repository and run
+`./gradlew makeEclipseProject` (or `.\gradlew.bat makeEclipseProject` on
+Windows). This will create a new Eclipse project under
+`wvalib/build/outputs/eclipse-project` which can then be imported into your
+Eclipse installation.
+
+### Compiling the library yourself
 
 Before you can build the library you must point to the location of the
 Android SDK by setting your `ANDROID_HOME` environment variable or
