@@ -39,7 +39,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * Use the {@link com.digi.wva.WVA} class to manage all interactions with the WVA.</p>
  */
 public class VehicleData {
-    private static final String TAG = "com.digi.wva.internal.VehicleData";
+    private static final String TAG = "wvalib VehicleData";
     private static final String VEHICLE_BASE = "vehicle/data/";
     private static final String SUBSCRIPTION_BASE = "subscriptions/";
     private static final String ALARM_BASE = "alarms/";
@@ -61,7 +61,7 @@ public class VehicleData {
     private final HttpClient httpClient;
 
     /**
-     * Maps vehicle data endpoints to their listeners.
+     * Maps URIs to their listeners.
      */
     private ConcurrentHashMap<String, VehicleDataListener> listenerMap = new ConcurrentHashMap<String, VehicleDataListener>();
     private VehicleDataListener allListener;
@@ -74,6 +74,17 @@ public class VehicleData {
         this.dataCache = new ConcurrentHashMap<String, VehicleDataResponse>();
         this.httpClient = client;
         this.endpointNames = new HashSet<String>();
+    }
+
+    /**
+     * Given an endpoint name, get the 'full' web services URI for that endpoint (e.g.
+     * EngineSpeed -> vehicle/data/EngineSpeed).
+     *
+     * @param endpoint the endpoint name whose URI is needed
+     * @return the URI corresponding to the given endpoint
+     */
+    private String uriFromEndpoint(String endpoint) {
+        return VEHICLE_BASE + endpoint;
     }
 
     /**
@@ -143,17 +154,17 @@ public class VehicleData {
 
     /**
      * Triggers the {@link #setVehicleDataListener(String, VehicleDataListener) listener associated}
-     * with <b>e</b>'s {@link VehicleDataEvent#getEndpoint() endpoint name} (if there are any), and then
+     * with <b>e</b>'s {@link VehicleDataEvent#getUri()} URI} (if there are any), and then
      * the {@link #setVehicleDataListener(VehicleDataListener) "catch-all" listener} (if any).
      *
      * @param e the event to be used to trigger the aforementioned listeners
      */
     public void notifyListeners(VehicleDataEvent e) {
-        String endpoint = e.getEndpoint();
+        String uri = e.getUri();
 
-        // Call the endpoint-specific listener, if any
-        if (listenerMap.containsKey(endpoint)) {
-            listenerMap.get(endpoint).onEvent(e);
+        // Call the URI-specific listener, if any
+        if (listenerMap.containsKey(uri)) {
+            listenerMap.get(uri).onEvent(e);
         }
 
         if (allListener != null) {
@@ -224,28 +235,66 @@ public class VehicleData {
      * Underlying implementation of {@link com.digi.wva.WVA#setVehicleDataListener(String, VehicleDataListener)}
      */
     public void setVehicleDataListener(String endpoint, VehicleDataListener listener) {
-        listenerMap.put(endpoint, listener);
+        listenerMap.put(uriFromEndpoint(endpoint), listener);
     }
 
     /**
      * Underlying implementation of {@link com.digi.wva.WVA#removeVehicleDataListener(String)}
      */
     public void removeVehicleDataListener(String endpoint) {
-        listenerMap.remove(endpoint);
+        listenerMap.remove(uriFromEndpoint(endpoint));
+    }
+
+    /**
+     * Underlying implementation of {@link com.digi.wva.WVA#setUriListener(String, VehicleDataListener)}
+     */
+    public void setUriListener(String uri, VehicleDataListener listener) {
+        if (uri.startsWith(VEHICLE_BASE)) {
+            // Log a warning about using this method to manipulate vehicle/data/ listeners.
+            String message = String.format(
+                    "setUriListener was called with uri \"%s\". This function is intended to be used " +
+                            "with non-vehicle-data URIs like vehicle/ignition. Use setVehicleDataListener instead.",
+                    uri);
+            Log.w(TAG, message);
+        }
+        listenerMap.put(uri, listener);
+    }
+
+    /**
+     * Underlying implementation of {@link com.digi.wva.WVA#removeUriListener(String)}
+     */
+    public void removeUriListener(String uri) {
+        if (uri.startsWith(VEHICLE_BASE)) {
+            // Log a warning about using this method to manipulate vehicle/data/ listeners.
+            String message = String.format(
+                    "removeUriListener was called with uri \"%s\". This function is intended to be " +
+                            "used with non-vehicle-data URIs like vehicle/ignition. Use removeVehicleDataListener instead.",
+                    uri);
+            Log.w(TAG, message);
+        }
+        listenerMap.remove(uri);
     }
 
     /**
      * Underlying implementation of {@link com.digi.wva.WVA#getCachedVehicleData(String)}
      */
     public VehicleDataResponse getCachedVehicleData(String endpoint) {
-        return dataCache.get(VEHICLE_BASE + endpoint);
+        return dataCache.get(uriFromEndpoint(endpoint));
+    }
+
+    /**
+     * Underlying implementation of {@link com.digi.wva.WVA#getCachedDataAtUri(String)}
+     */
+    public VehicleDataResponse getCachedDataAtUri(String uri) {
+        return dataCache.get(uri);
     }
 
     /**
      * Underlying implementation of {@link com.digi.wva.WVA#fetchVehicleData(String, WvaCallback)}
      */
     public void fetchVehicleData(final String endpoint, final WvaCallback<VehicleDataResponse> cb) {
-        httpClient.get(VEHICLE_BASE + endpoint, new HttpCallback() {
+        final String uri = uriFromEndpoint(endpoint);
+        httpClient.get(uri, new HttpCallback() {
             @Override
             public void onSuccess(JSONObject jObj) {
                 JSONObject valTimeObj;
@@ -254,7 +303,7 @@ public class VehicleData {
                     VehicleDataResponse response = new VehicleDataResponse(valTimeObj);
 
                     // Update the cache
-                    dataCache.put(VEHICLE_BASE + endpoint, response);
+                    dataCache.put(uri, response);
 
                     if (cb != null) {
                         cb.onResponse(null, response);
@@ -286,7 +335,7 @@ public class VehicleData {
         JSONObject parameters = new JSONObject();
         JSONObject subscription = new JSONObject();
         parameters.put("interval", seconds);
-        parameters.put("uri", VEHICLE_BASE + endpoint);
+        parameters.put("uri", uriFromEndpoint(endpoint));
         parameters.put("buffer",  BUFFER_SUBSCRIPTIONS ? "queue" : "discard");
         subscription.put("subscription",  parameters);
 
@@ -315,6 +364,57 @@ public class VehicleData {
                         error = new EndpointUnknownException("Vehicle data endpoint " + endpoint + " does not exist.");
                     }
                     cb.onResponse(error, null);
+                }
+            }
+        });
+    }
+
+    /**
+     * Underlying implementation of {@link com.digi.wva.WVA#subscribeToUri(String, int, WvaCallback)}
+     * @since 2.1.0
+     */
+    public void subscribeToUri(final String uri, int seconds, final WvaCallback<Void> callback) throws JSONException {
+        if (uri.startsWith(VEHICLE_BASE)) {
+            // Log a warning about using this method to manipulate data subscriptions.
+            String message = String.format(
+                    "subscribeToUri was called with uri \"%s\". This function is intended to be " +
+                            "used with non-vehicle-data URIs like vehicle/ignition. Use WVA#subscribeToVehicleData instead.",
+                    uri);
+            Log.w(TAG, message);
+        }
+
+        JSONObject parameters = new JSONObject();
+        JSONObject subscription = new JSONObject();
+        parameters.put("interval", seconds);
+        parameters.put("uri", uri);
+        parameters.put("buffer",  BUFFER_SUBSCRIPTIONS ? "queue" : "discard");
+        subscription.put("subscription",  parameters);
+
+        // The url at which the subscription will be available
+        final String shortName = WvaUtil.getEscapedStringFromUri(uri) + SUB_SUFFIX;
+
+        httpClient.put(SUBSCRIPTION_BASE + shortName, subscription, new ExpectEmptyCallback() {
+            @Override
+            public void onSuccess() {
+                if (callback != null) {
+                    callback.onResponse(null, null);
+                }
+            }
+
+            @Override
+            public void onBodyNotEmpty(String body) {
+                Log.e(TAG, "subscribe got unexpected response body content:\n" + body);
+                onFailure(new Exception("Unexpected response body: " + body));
+            }
+
+            @Override
+            public void onFailure(Throwable error) {
+                Log.e(TAG, "Failed to subscribe to " + uri);
+                if (callback != null) {
+                    if (error instanceof WvaHttpException.WvaHttpNotFound) {
+                        error = new EndpointUnknownException("URI " + uri + " does not exist.");
+                    }
+                    callback.onResponse(error, null);
                 }
             }
         });
@@ -358,13 +458,59 @@ public class VehicleData {
     }
 
     /**
+     * Underlying implementation of {@link com.digi.wva.WVA#unsubscribeFromUri(String, WvaCallback)}
+     */
+    public void unsubscribeFromUri(final String uri, final WvaCallback<Void> cb) {
+        if (uri.startsWith(VEHICLE_BASE)) {
+            // Log a warning about using this method to manipulate data subscriptions.
+            String message = String.format(
+                    "unsubscribeFromUri was called with uri \"%s\". This function is intended to be " +
+                            "used with non-vehicle-data URIs like vehicle/ignition. Use WVA#unsubscribeFromVehicleData instead.",
+                    uri);
+            Log.w(TAG, message);
+        }
+
+        final String shortName = WvaUtil.getEscapedStringFromUri(uri) + SUB_SUFFIX;
+
+        httpClient.delete(SUBSCRIPTION_BASE + shortName, new ExpectEmptyCallback() {
+            @Override
+            public void onFailure(Throwable error) {
+                if (error instanceof WvaHttpException.WvaHttpNotFound) {
+                    // The error was 404 not found. This is fine, since it means
+                    // there were no subscriptions for this endpoint to begin with.
+                    // We don't need to fill the logs with the stack trace from this error.
+                    Log.e(TAG, "Unable to unsubscribe from " + uri + ": no subscription exists.");
+                } else {
+                    Log.e(TAG, "Unable to unsubscribe from " + uri, error);
+                }
+                if (cb != null) {
+                    cb.onResponse(error, null);
+                }
+            }
+
+            @Override
+            public void onBodyNotEmpty(String body) {
+                Log.e(TAG, "unsubscribeFromUri got unexpected response body content:\n" + body);
+                onFailure(new Exception("Unexpected response body: " + body));
+            }
+
+            @Override
+            public void onSuccess() {
+                if (cb != null) {
+                    cb.onResponse(null, null);
+                }
+            }
+        });
+    }
+
+    /**
      * Underlying implementation of {@link com.digi.wva.WVA#createVehicleDataAlarm(String, AlarmType, float, int, WvaCallback)}
      */
     public void createAlarm(final String endpoint, AlarmType type, double threshold, int seconds, final WvaCallback<Void> cb) throws JSONException {
         JSONObject parameters = new JSONObject();
         JSONObject alarm = new JSONObject();
         parameters.put("interval", seconds);
-        parameters.put("uri", VEHICLE_BASE + endpoint);
+        parameters.put("uri", uriFromEndpoint(endpoint));
         parameters.put("type", AlarmType.makeString(type));
         parameters.put("threshold", threshold);
         parameters.put("buffer", BUFFER_ALARMS ? "queue" : "discard");
@@ -395,6 +541,60 @@ public class VehicleData {
                         error = new EndpointUnknownException("Vehicle data endpoint " + endpoint + " does not exist.");
                     }
                     cb.onResponse(error, null);
+                }
+            }
+        });
+    }
+
+    /**
+     * Underlying implementation of
+     * {@link com.digi.wva.WVA#createUriAlarm(String, AlarmType, float, int, WvaCallback)}
+     */
+    public void createUriAlarm(final String uri, final AlarmType type, final float threshold,
+                               final int seconds, final WvaCallback<Void> callback) throws JSONException {
+        if (uri.startsWith(VEHICLE_BASE)) {
+            // Log a warning about using this method to manipulate data alarms.
+            String message = String.format(
+                    "createUriAlarm was called with uri \"%s\". This function is intended to be " +
+                            "used with non-vehicle-data URIs like vehicle/ignition. Use WVA#createVehicleDataAlarm instead.",
+                    uri);
+            Log.w(TAG, message);
+        }
+
+        JSONObject parameters = new JSONObject();
+        JSONObject alarm = new JSONObject();
+        parameters.put("interval", seconds);
+        parameters.put("uri", uri);
+        parameters.put("type", AlarmType.makeString(type));
+        parameters.put("threshold", threshold);
+        parameters.put("buffer", BUFFER_ALARMS ? "queue" : "discard");
+        alarm.put("alarm",  parameters);
+
+        // The resource at which the alarm will be available
+        final String shortname = WvaUtil.getEscapedStringFromUri(uri) + "~" + AlarmType.makeString(type);
+
+        httpClient.put(ALARM_BASE + shortname, alarm, new ExpectEmptyCallback() {
+            @Override
+            public void onSuccess() {
+                if (callback != null) {
+                    callback.onResponse(null, null);
+                }
+            }
+
+            @Override
+            public void onBodyNotEmpty(String body) {
+                Log.e(TAG, "createAlarm got unexpected response body content:\n" + body);
+                onFailure(new Exception("Unexpected response body: " + body));
+            }
+
+            @Override
+            public void onFailure(Throwable error) {
+                Log.e(TAG, "Failed to create alarm " + shortname, error);
+                if (callback != null) {
+                    if (error instanceof WvaHttpException.WvaHttpNotFound) {
+                        error = new EndpointUnknownException("URI " + uri + " does not exist.");
+                    }
+                    callback.onResponse(error, null);
                 }
             }
         });
@@ -433,6 +633,52 @@ public class VehicleData {
             public void onSuccess() {
                 if (cb != null) {
                     cb.onResponse(null, null);
+                }
+            }
+        });
+    }
+
+    /**
+     * Underlying implementation of {@link com.digi.wva.WVA#deleteUriAlarm(String, AlarmType, WvaCallback)}
+     */
+    public void deleteUriAlarm(final String uri, final AlarmType type, final WvaCallback<Void> callback) {
+        if (uri.startsWith(VEHICLE_BASE)) {
+            // Log a warning about using this method to manipulate data alarms.
+            String message = String.format(
+                    "deleteUriAlarm was called with uri \"%s\". This function is intended to be " +
+                            "used with non-vehicle-data URIs like vehicle/ignition. Use WVA#deleteVehicleDataAlarm instead.",
+                    uri);
+            Log.w(TAG, message);
+        }
+
+        final String shortname = WvaUtil.getEscapedStringFromUri(uri) + "~" + AlarmType.makeString(type);
+
+        httpClient.delete(ALARM_BASE + shortname, new ExpectEmptyCallback() {
+            @Override
+            public void onFailure(Throwable error) {
+                if (error instanceof WvaHttpException.WvaHttpNotFound) {
+                    // The error was 404 not found. This is fine, since it means
+                    // there were no alarms for this endpoint and type to begin with.
+                    // We don't need to fill the logs with the stack trace from this error.
+                    Log.e(TAG, "Unable to remove alarm for " + uri + ": no alarm exists.");
+                } else {
+                    Log.e(TAG, "Unable to remove alarm for " + uri, error);
+                }
+                if (callback != null) {
+                    callback.onResponse(error, null);
+                }
+            }
+
+            @Override
+            public void onBodyNotEmpty(String body) {
+                Log.e(TAG, "deleteUriAlarm got unexpected response body content:\n" + body);
+                onFailure(new Exception("Unexpected response body: " + body));
+            }
+
+            @Override
+            public void onSuccess() {
+                if (callback != null) {
+                    callback.onResponse(null, null);
                 }
             }
         });

@@ -58,6 +58,19 @@ public class WvaUtilTest extends TestCase {
     }
 
     /**
+     * Test that getEscapedStringFromUri replaces all slashes with tilde characters (~),
+     * but returns null if the input string is null or empty.
+     */
+    public void testGetEscapedStringFromUri() {
+        assertNull(WvaUtil.getEscapedStringFromUri(null));
+        assertNull(WvaUtil.getEscapedStringFromUri(""));
+
+        assertEquals("vehicle~ignition", WvaUtil.getEscapedStringFromUri("vehicle/ignition"));
+        assertEquals("a~b~c", WvaUtil.getEscapedStringFromUri("a/b/c"));
+        assertEquals("foo", WvaUtil.getEscapedStringFromUri("foo"));
+    }
+
+    /**
      * Test that getConfigKeyFromUri is able to extract the correct key from various
      * example paths.
      */

@@ -1,6 +1,6 @@
 buildscript {
     dependencies {
-        classpath 'com.github.dcendents:android-maven-plugin:1.1'
+        classpath 'com.github.dcendents:android-maven-plugin:1.2'
         classpath 'org.apache.maven.wagon:wagon-http:2.2'
     }
     // Based on https://github.com/Netflix/gradle-template build.gradle
@@ -31,7 +31,7 @@ project.ext {
 
 import groovy.io.FileType
 
-version '2.0' + versionSuffix
+version '2.1.0.rc1' + versionSuffix
 group 'com.digi.wva'
 
 dependencies {
@@ -47,12 +47,12 @@ dependencies {
 }
 
 android {
-    compileSdkVersion 20
-    buildToolsVersion "20"
+    compileSdkVersion 22
+    buildToolsVersion "22.0.1"
 
     defaultConfig {
         minSdkVersion 9
-        targetSdkVersion 20
+        targetSdkVersion 22
 
         testApplicationId "com.digi.wva.test"
         testInstrumentationRunner "com.digi.wva.WVATestRunner"

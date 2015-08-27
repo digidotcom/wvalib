@@ -38,7 +38,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class FaultCodes {
 
-    private static final String TAG = "com.digi.wva.internal.FaultCodes";
+    private static final String TAG = "wvalib FaultCodes";
     private static final String SUBSCRIPTION_BASE = "subscriptions/";
     private static final String ALARM_BASE = "alarms/";
     private static final boolean BUFFER_SUBSCRIPTIONS = true;

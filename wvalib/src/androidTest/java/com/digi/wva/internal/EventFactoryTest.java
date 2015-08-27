@@ -15,6 +15,9 @@ import com.digi.wva.async.EventFactory.Type;
 import com.digi.wva.async.EventFactory;
 import com.digi.wva.test_auxiliary.JsonFactory;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 public class EventFactoryTest extends TestCase {
     VehicleDataEvent subscriptionEventTest = null;
     VehicleDataEvent alarmEventTest = null;
@@ -57,6 +60,39 @@ public class EventFactoryTest extends TestCase {
 
         VehicleDataResponse resp2 = alarmEventTest.getResponse();
         assertEquals(4.3, resp2.getValue());
+    }
+
+    public void testFromTCP_MissingKey() throws JSONException {
+        // Should throw a JSONException if the value key is missing.
+        JSONObject data = jFactory.data();
+
+        // Get rid of the key-value pair associated with the data value
+        data.getJSONObject("data").remove("baz");
+
+        try {
+            EventFactory.fromTCP(data);
+            fail("EventFactory.fromTCP on data missing its value key should have thrown!");
+        } catch (JSONException e) {
+            assertTrue(e.getMessage().contains("does not contain key"));
+        }
+    }
+
+    public void testFromTCP_OtherVehicleData() throws JSONException {
+        // otherVehicleDataEvent() yields a vehicle/ignition event, where the "ignition" value is
+        // simply "on", in contrast with normal vehicle data events, where the value is a JSON
+        // object containing a timestamp and value.
+        VehicleDataEvent e = (VehicleDataEvent) EventFactory.fromTCP(jFactory.otherVehicleDataEvent());
+        assertNotNull(e);
+
+        VehicleDataResponse resp = e.getResponse();
+        assertNotNull(resp);
+
+        assertEquals("on", resp.getRawValue());
+        // Cannot parse "on" as a double value, so on .getValue() we should get null
+        assertNull(resp.getValue());
+        // We reuse the event timestamp as the data timestamp in these cases, so these DateTime
+        // objects should be the same.
+        assertEquals(resp.getTime(), e.getSent());
     }
 
     public void testGetEndpoint() {

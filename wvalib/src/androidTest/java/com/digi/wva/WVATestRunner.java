@@ -16,6 +16,11 @@ public class WVATestRunner extends android.test.InstrumentationTestRunner {
         // Mockito/Dexmaker from working properly. This is a workaround.
         // https://code.google.com/p/dexmaker/issues/detail?id=2
         System.setProperty("dexmaker.dexcache", getTargetContext().getCacheDir().getAbsolutePath());
+
+        // Fix a bug with running the tests on the ART runtime:
+        // http://stackoverflow.com/q/20514588
+        args.putString("package", "com.digi.wva");
+
         super.onCreate(args);
     }
 }

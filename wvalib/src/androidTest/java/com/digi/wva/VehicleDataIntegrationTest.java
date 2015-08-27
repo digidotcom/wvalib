@@ -14,7 +14,6 @@ import com.digi.wva.async.EventFactory;
 import com.digi.wva.async.VehicleDataEvent;
 import com.digi.wva.async.VehicleDataResponse;
 import com.digi.wva.exc.WvaHttpException;
-import com.digi.wva.internal.Ecus;
 import com.digi.wva.test_auxiliary.IntegrationTestCase;
 import com.digi.wva.test_auxiliary.MockStateListener;
 import com.digi.wva.test_auxiliary.MockVehicleDataListener;
@@ -114,7 +113,12 @@ public class VehicleDataIntegrationTest extends IntegrationTestCase {
                 VehicleDataEvent e = listeners[index].expectEvent();
                 assertEquals(endpoints[index], e.getEndpoint());
                 double delta = Math.abs(value - e.getResponse().getValue());
+
+                double rawDelta = Math.abs(value - (Double) e.getResponse().getRawValue());
+
                 assertTrue("Values not close enough", delta < VALUE_PRECISION);
+                assertTrue("Raw value not close enough to expected value",
+                           rawDelta < VALUE_PRECISION);
             }
         }
 
@@ -170,7 +174,52 @@ public class VehicleDataIntegrationTest extends IntegrationTestCase {
 
         // Verify callback behavior
         assertNotNull(cb.error);
+    }
 
+    /**
+     * Test that subscribing to a URI generates the appropriate web services PUT call.
+     */
+    public void testSubscribeToUri() throws Exception {
+        // Respond with success
+        MockResponse response = new MockResponse();
+        response.setResponseCode(201);
+        ws.enqueue(response);
+
+        // Perform test call
+        MockWvaCallback<Void> cb = new MockWvaCallback<Void>("vehicle/ignition subscribe");
+        wva.subscribeToUri("vehicle/ignition", 1, cb);
+        cb.expectResponse();
+
+        // Verify callback behavior
+        assertNull(cb.error);
+
+        RecordedRequest record = ws.takeRequest();
+        assertEquals("PUT", record.getMethod());
+        assertEquals("/ws/subscriptions/vehicle~ignition~sub", record.getPath());
+        JSONObject body = new JSONObject(record.getUtf8Body());
+
+        // Verify body contents
+        JSONObject subscription = body.getJSONObject("subscription");
+        assertEquals("vehicle/ignition", subscription.getString("uri"));
+        assertEquals(1, subscription.getInt("interval"));
+    }
+
+    /**
+     * Test that subscribeToUri correctly passes an error back to the callback.
+     */
+    public void testSubscribeToUriError() throws Exception {
+        // Queue an error
+        MockResponse response = new MockResponse();
+        response.setResponseCode(400);
+        ws.enqueue(response);
+
+        // Perform test call
+        MockWvaCallback<Void> cb = new MockWvaCallback<Void>("Error callback");
+        wva.subscribeToUri("vehicle/ignition", 1, cb);
+        cb.expectResponse();
+
+        // Verify callback behavior
+        assertNotNull(cb.error);
     }
 
     /**
@@ -200,16 +249,35 @@ public class VehicleDataIntegrationTest extends IntegrationTestCase {
         assertEquals("", record.getUtf8Body());
     }
 
+    public void testUnsubscribeFromUri() throws Exception {
+        // Respond with success
+        MockResponse response = new MockResponse();
+        response.setResponseCode(200);
+        ws.enqueue(response);
+
+        // Perform test call
+        MockWvaCallback<Void> cb = new MockWvaCallback<Void>("vehicle/ignition unsubscribe");
+        wva.unsubscribeFromUri("vehicle/ignition", cb);
+        cb.expectResponse();
+
+        // Verify callback behavior
+        assertNull(cb.error);
+
+        RecordedRequest record = ws.takeRequest();
+        assertEquals("DELETE", record.getMethod());
+        assertEquals("/ws/subscriptions/vehicle~ignition~sub", record.getPath());
+        assertEquals("", record.getUtf8Body());
+    }
 
     /**
      * Test the happy-path behavior of fetchVehicleData
      */
     public void testFetchVehicleData() throws Exception {
-        // Respond with a value of 55
+        // Respond with a value of 55.1
         MockResponse response = new MockResponse();
         JSONObject inner = new JSONObject();
         inner.put("timestamp", "2014-01-01T12:00:00Z");
-        inner.put("value", 55.000);
+        inner.put("value", 55.100);
         JSONObject body = new JSONObject().put("EngineTemperature", inner);
         response.setBody(body.toString());
         ws.enqueue(response);
@@ -222,7 +290,11 @@ public class VehicleDataIntegrationTest extends IntegrationTestCase {
         // Verify callback behavior
         assertNull(callback.error);
         assertNotNull(callback.response);
-        assertEquals(55.0, callback.response.getValue());
+        assertEquals(55.1, callback.response.getValue());
+        // Check raw value as well.
+        double rawDelta = Math.abs(55.1 - (double) callback.response.getRawValue());
+        assertTrue("Raw value not close enough to expected value",
+                   rawDelta < VALUE_PRECISION);
 
         // Verify the HTTP request
         RecordedRequest request = ws.takeRequest();

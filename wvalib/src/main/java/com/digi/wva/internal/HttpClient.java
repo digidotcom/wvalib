@@ -143,7 +143,7 @@ public class HttpClient {
         }
     }
 
-    private static final String TAG = "com.digi.wva.internal.HttpClient";
+    private static final String TAG = "wvalib HttpClient";
     private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
 
     /**
@@ -153,6 +153,16 @@ public class HttpClient {
     private String credentials;
     private int httpPort = 80, httpsPort = 443;
     private boolean useSecureHttp;
+
+    /**
+     * If true, we will log outgoing requests and incoming responses as follows:
+     *
+     * Outgoing:
+     *     --> GET http://192.168.0.3/ws/vehicle/data
+     * Incoming:
+     *     <-- 200 GET http://192.168.0.3/ws/vehicle/data
+     */
+    private boolean doLogging = false;
 
     private final String hostname;
     private final OkHttpClient client;
@@ -205,6 +215,21 @@ public class HttpClient {
                 }
             });
         this.hostname = hostname;
+    }
+
+    /**
+     * @return true if HTTP logging is enabled
+     */
+    public boolean getLoggingEnabled() {
+        return this.doLogging;
+    }
+
+    /**
+     * Set whether all HTTP requests and responses should be logged to the standard Android logs
+     * @param enabled true if requests/responses should be logged, false otherwise
+     */
+    public void setLoggingEnabled(boolean enabled) {
+        this.doLogging = enabled;
     }
 
     /**
@@ -265,8 +290,9 @@ public class HttpClient {
         return new Callback() {
             @Override
             public void onResponse(Response response) throws IOException {
+                logResponse(response);
+
                 Request request = response.request();
-                Log.i(TAG, "\u2190 " + response.code() + " " + request.method() + " " + request.urlString());
                 String responseBody = response.body().string();
                 if (response.isSuccessful()) {
                     // Request succeeded. Parse JSON response.
@@ -379,7 +405,64 @@ public class HttpClient {
      * </p>
      */
     protected void logRequest(Request request) {
+        if (!doLogging) {
+            // Logging is disabled - do nothing.
+            return;
+        }
+
         Log.i(TAG, "\u2192 " + request.method() + " " + request.urlString());
+    }
+
+    /**
+     * Log information of OkHttp Response objects
+     *
+     * <p>This method is protected, rather than private, due to a bug between JaCoCo and
+     * the Android build tools which causes the instrumented bytecode to be invalid when this
+     * method is private:
+     * <a href="http://stackoverflow.com/questions/17603192/dalvik-transformation-using-wrong-invoke-opcode" target="_blank">see StackOverflow question.</a>
+     * </p>
+     * @param response the HTTP response object to log
+     */
+    protected void logResponse(Response response) {
+        if (!doLogging) {
+            // Logging is disabled - do nothing.
+            return;
+        }
+
+        Request request = response.request();
+
+        StringBuilder log = new StringBuilder();
+        log.append(
+                // e.g. <-- 200 GET /ws/hw/leds/foo
+                String.format("\u2190 %d %s %s",
+                        response.code(), request.method(), request.urlString()));
+
+        // Add on lines tracking any redirects that occurred.
+        Response prior = response.priorResponse();
+        if (prior != null) {
+            // Call out that there were prior responses.
+            log.append(" (prior responses below)");
+
+            // Add a line to the log message for each prior response.
+            // (For most if not all responses, there will likely be just one.)
+            do {
+                log.append(
+                        String.format(
+                                "\n... prior response: %d %s %s",
+                                prior.code(), prior.request().method(), prior.request().urlString())
+                );
+
+                // If this is a redirect, log the URL we're being redirected to.
+                if (prior.isRedirect()) {
+                    log.append(", redirecting to ");
+                    log.append(prior.header("Location", "[no Location header found?!]"));
+                }
+
+                prior = prior.priorResponse();
+            } while (prior != null);
+        }
+
+        Log.i(TAG, log.toString());
     }
 
     /**

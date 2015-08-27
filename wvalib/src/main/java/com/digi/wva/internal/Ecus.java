@@ -29,7 +29,7 @@ import java.util.concurrent.ConcurrentMap;
  * parts and attributes, such as VINs, serial numbers, make, and model.
  */
 public class Ecus {
-    private static final String TAG = "com.digi.wva.internal.Ecus";
+    private static final String TAG = "wvalib Ecus";
     private static final String ECU_BASE = "vehicle/ecus/";
 
     private final HttpClient httpClient;

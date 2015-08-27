@@ -35,6 +35,7 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.net.Inet4Address;
 import java.util.Set;
 
 /**
@@ -226,6 +227,26 @@ public class WVA {
     }
 
     /**
+     * WVA Constructor. Added for convenience when using Inet4Address in an application.
+     *
+     * @since 2.1.0
+     *
+     * @see #WVA(String)
+     */
+    public WVA(Inet4Address host) {
+        // Call into the other constructor with the string representation of the given inet address.
+        this(host.getHostAddress());
+    }
+
+    /**
+     * @since 2.1.0
+     * @return the hostname this WVA object is associated with
+     */
+    public String getHostName() {
+        return this.hostname;
+    }
+
+    /**
      * Sets the basic authentication credentials (username and password) to be used
      * when interacting with the WVA over HTTP or HTTPS.
      *
@@ -296,6 +317,38 @@ public class WVA {
     public WVA setHttpsPort(int port) {
         this.httpClient.setHttpsPort(port);
         return this;
+    }
+
+    /**
+     * Sets a flag controlling whether all HTTP requests and responses should be logged.
+     *
+     * <p>The logging that occurs in these cases simply tracks methods, URLs and response codes.
+     * Some example log messages can be seen here:
+     *  <ul>
+     *      <li><code>\u2192 GET http://192.168.0.3/ws/vehicle/data/EngineSpeed</code></li>
+     *      <li><code>\u2190 200 GET http://192.168.0.3/ws/vehicle/data/EngineSpeed</code></li>
+     *      <li>
+     *          <pre>\u2190 200 GET https://192.168.0.3/ws/vehicle/data (prior responses below)</pre>
+     *          <pre>... prior response: 301 GET http://192.168.0.3:80/ws/vehicle/data, redirecting to https://192.168.0.3/ws/vehicle/data</pre>
+     *      </li>
+     *  </ul>
+     * </p>
+     *
+     * @since 2.1.0
+     * @param enabled true to enable HTTP logging, false to disable HTTP logging (the default value)
+     * @return this WVA object, for chaining purposes
+     */
+    public WVA setHttpLoggingEnabled(boolean enabled) {
+        this.httpClient.setLoggingEnabled(enabled);
+        return this;
+    }
+
+    /**
+     * @since 2.1.0
+     * @return true if HTTP logging is enabled, false if HTTP logging is disabled
+     */
+    public boolean getHttpLoggingEnabled() {
+        return this.httpClient.getLoggingEnabled();
     }
 
     /**
@@ -594,6 +647,92 @@ public class WVA {
     }
 
     /**
+     * Fetches the web services response to performing a GET at the given URI.
+     *
+     * @param wsPath the {@code ws/} path to query, e.g. {@code "vehicle/ignition"}
+     * @param callback callback to be executed once the request is completed
+     */
+    public void uriGet(final String wsPath, final WvaCallback<JSONObject> callback) {
+        if (callback == null) {
+            // It would make no sense to have a null callback here.
+            throw new NullPointerException("uriGet callback must not be null!");
+        }
+
+        final WvaCallback<JSONObject> wrapped = WvaCallback.wrap(callback, this.uiThreadHandler);
+
+        httpClient.get(wsPath, new HttpClient.HttpCallback() {
+            @Override
+            public void onSuccess(JSONObject response) {
+                wrapped.onResponse(null, response);
+            }
+
+            @Override
+            public void onFailure(Throwable error) {
+                wrapped.onResponse(error, null);
+            }
+        });
+    }
+
+    /**
+     * Perform an HTTP PUT request on the given web services path.
+     *
+     * @param wsPath the {@code ws/} path to PUT to, e.g. {@code "hw/reboot"}
+     * @param data the JSON content to send as the body of the request. May be null.
+     * @param callback callback to be executed once the request is completed
+     */
+    public void uriPut(final String wsPath, final JSONObject data, final WvaCallback<JSONObject> callback) {
+        final WvaCallback<JSONObject> wrapped = WvaCallback.wrap(callback, this.uiThreadHandler);
+
+        httpClient.put(wsPath, data, new HttpClient.HttpCallback() {
+            @Override
+            public void onSuccess(JSONObject response) {
+                if (wrapped != null) {
+                    wrapped.onResponse(null, response);
+                }
+            }
+
+            @Override
+            public void onFailure(Throwable error) {
+                if (wrapped != null) {
+                    wrapped.onResponse(error, null);
+                }
+            }
+        });
+    }
+
+    /**
+     * Perform an HTTP DELETE request on the given web services path.
+     *
+     * @param wsPath the {@code ws/} path to PUT to, e.g. {@code "files/userfs/WEB/python/file.txt"}
+     * @param callback callback to be executed once the request is completed
+     */
+    public void uriDelete(final String wsPath, final WvaCallback<Void> callback) {
+        final WvaCallback<Void> wrapped = WvaCallback.wrap(callback, this.uiThreadHandler);
+
+        httpClient.delete(wsPath, new ExpectEmptyCallback() {
+            @Override
+            public void onFailure(Throwable error) {
+                if (wrapped != null) {
+                    wrapped.onResponse(error, null);
+                }
+            }
+
+            @Override
+            public void onBodyNotEmpty(String body) {
+                Log.e(TAG, "uriDelete got unexpected response body content:\n" + body);
+                onFailure(new Exception("Unexpected response body: " + body));
+            }
+
+            @Override
+            public void onSuccess() {
+                if (wrapped != null) {
+                    wrapped.onResponse(null, null);
+                }
+            }
+        });
+    }
+
+    /**
      * Attempts to determine whether the device with which we are communicating
      * is in fact a WVA. This is done by querying {@code /ws/} and comparing the list of
      * web services listed to services we know are present on a WVA.
@@ -753,9 +892,62 @@ public class WVA {
     }
 
     /**
+     * Sets the {@link com.digi.wva.async.VehicleDataListener} to be invoked when a new vehicle data
+     * event pertaining to the given URI arrives via the event channel. These events can be
+     * subscription or alarm updates.
+     *
+     * <p>
+     *     If you have configured both a listener for a given URI ("vehicle/ignition", for instance),
+     *     and the catch-all listener
+     *     (using {@link #setVehicleDataListener(com.digi.wva.async.VehicleDataListener)}), then
+     *     the listener set using this method will be invoked first on new events.
+     * </p>
+     *
+     * <p>
+     *     <strong>NOTE:</strong> While it is technically possible to use this method to register
+     *     a listener for vehicle data endpoints (e.g. vehicle/data/EngineSpeed), doing so will
+     *     add a warning to your application's logs, as you should register/unregister these
+     *     listeners using {@link #setVehicleDataListener(String, VehicleDataListener)} and
+     *     {@link #removeVehicleDataListener(String)}. This method, by contrast, is intended to
+     *     be used to add listeners for URIs such as {@code "vehicle/ignition"} which do not fit
+     *     into the "vehicle data" model but are subscribable anyway.
+     * </p>
+     *
+     * @see #removeUriListener(String)
+     * @since 2.1.0
+     *
+     * @param uri the web services URI with which to associate this listener
+     * @param listener the listener to be invoked with matching event channel vehicle data
+     *
+     * @throws NullPointerException if <b>listener</b> is null.
+     *                              (Use {@link #removeVehicleDataListener(String)} for that purpose)
+     */
+    public void setUriListener(String uri, VehicleDataListener listener) {
+        if (listener == null) {
+            Log.e(TAG, "Null listeners are not allowed in setUriListener. Use removeUriListener instead.");
+            throw new NullPointerException("Null listeners are not allowed in setUriListener. Use removeUriListener instead.");
+        }
+
+        vehicleData.setUriListener(uri, VehicleDataListener.wrap(listener, this.uiThreadHandler));
+    }
+
+    /**
+     * Removes any {@link com.digi.wva.async.VehicleDataListener} that has been set to be
+     * invoked on new vehicle data pertaining to the given URI.
+     *
+     * @see #setUriListener(String, VehicleDataListener)
+     * @since 2.1.0
+     *
+     * @param uri the web services URI whose listener is to be removed
+     */
+    public void removeUriListener(String uri) {
+        vehicleData.removeUriListener(uri);
+    }
+
+    /**
      * Removes all listeners
      * {@link #setVehicleDataListener(String, com.digi.wva.async.VehicleDataListener) associated}
-     * with any endpoint name, as well as the
+     * with any endpoint name or URI, as well as the
      * {@link #setVehicleDataListener(com.digi.wva.async.VehicleDataListener) "catch-all" listener},
      * if any.
      *
@@ -815,6 +1007,55 @@ public class WVA {
     }
 
     /**
+     * Calls {@link #subscribeToUri(String, int, WvaCallback)} with a null callback,
+     * meaning no direct feedback as to the success or failure of the request will be available.
+     */
+    public void subscribeToUri(final String uri, final int interval) {
+        subscribeToUri(uri, interval, null);
+    }
+
+    /**
+     * Subscribe to the given web services URI on the WVA.
+     *
+     * <p>
+     *     See {@link #subscribeToVehicleData(String, int, WvaCallback)} for notes on how the WVA
+     *     Android library manages subscriptions (e.g. only one subscription per URI, etc.).
+     * </p>
+     *
+     * <p>
+     *     See {@link #setUriListener(String, VehicleDataListener)} for information on
+     *     configuring a callback to be invoked each time subscription data arrives for the given
+     *     URI.
+     * </p>
+     *
+     * <p>
+     *     <strong>NOTE:</strong> While it is technically possible to use this method to register
+     *     a subscription for vehicle data endpoints (e.g. vehicle/data/EngineSpeed), doing so will
+     *     add a warning to your application's logs, as you should create/delete these
+     *     listeners using {@link #subscribeToVehicleData(String, int, WvaCallback)} and
+     *     {@link #unsubscribeFromVehicleData(String, WvaCallback)}. This method, by contrast, is
+     *     intended to be used to subscribe to URIs such as {@code "vehicle/ignition"} which do
+     *     not fit into the "vehicle data" model but are subscribable anyway.
+     * </p>
+     *
+     * @since 2.1.0
+     *
+     * @param uri The web services URI to subscribe to
+     * @param interval The interval of time between updates
+     * @param callback callback to give feedback on whether the subscription call succeeds or not
+     */
+    public void subscribeToUri(final String uri, final int interval, final WvaCallback<Void> callback) {
+        WvaCallback<Void> wrapped = WvaCallback.wrap(callback, this.uiThreadHandler);
+
+        try {
+            vehicleData.subscribeToUri(uri, interval, wrapped);
+        } catch (JSONException e) {
+            e.printStackTrace();
+            if (wrapped != null) wrapped.onResponse(e, null);
+        }
+    }
+
+    /**
      * Unsubscribes from the given endpoint on the WVA, by deleting the subscription record on
      * the device.
      *
@@ -831,6 +1072,27 @@ public class WVA {
      */
     public void unsubscribeFromVehicleData(final String endpoint) {
         vehicleData.unsubscribe(endpoint, null);
+    }
+
+    /**
+     * Unsubscribes from the given endpoint on the WVA, by deleting the subscription record on
+     * the device.
+     *
+     * @since 2.1.0
+     *
+     * @param uri The web services URI on which to unsubscribe
+     * @param callback callback to give feedback on whether the unsubscribe call succeeds or not
+     */
+    public void unsubscribeFromUri(final String uri, final WvaCallback<Void> callback) {
+        vehicleData.unsubscribeFromUri(uri, WvaCallback.wrap(callback, this.uiThreadHandler));
+    }
+
+    /**
+     * Calls {@link #unsubscribeFromUri(String, WvaCallback)} with a null callback,
+     * meaning no direct feedback as to the success or failure of the request will be available.
+     */
+    public void unsubscribeFromUri(final String uri) {
+        vehicleData.unsubscribeFromUri(uri, null);
     }
 
     /**
@@ -883,6 +1145,65 @@ public class WVA {
     }
 
     /**
+     * Create an alarm on the given web services URI on the WVA. Alarms are similar to
+     * subscriptions, but they do not occur at regular intervals. Instead, alarms produce data
+     * when special conditions occur; see the JavaDoc for {@link AlarmType} for more information
+     * about the capabilities of alarms.
+     *
+     * <p>
+     *     Note that the WVA Android library will maintain only one alarm record for each alarm type
+     *     on each web services URI, meaning that calling createUriAlarm with the same URI will
+     *     overwrite the previous alarm configuration on the WVA.
+     * </p>
+     *
+     * <p>
+     *     <strong>NOTE:</strong> While it is technically possible to use this method to register
+     *     an alarm for vehicle data (e.g. vehicle/data/EngineSpeed), doing so will
+     *     add a warning to your application's logs, as you should create/delete these
+     *     alarms using {@link #createVehicleDataAlarm(String, AlarmType, float, int, WvaCallback)}
+     *     and {@link #deleteVehicleDataAlarm(String, AlarmType, WvaCallback)}. This method,
+     *     by contrast, is intended to be used to add akarms to URIs such as {@code "vehicle/ignition"}
+     *     which do not fit into the "vehicle data" model but can be used for alarms anyway.
+     * </p>
+     *
+     * <p>
+     *     See {@link #setUriListener(String, VehicleDataListener)} for information on
+     *     configuring a callback to be invoked each time alarm data arrives for the given
+     *     URI.
+     * </p>
+     *
+     * @since 2.1.0
+     *
+     * @param uri The web services URI to add an alarm to
+     * @param type The type of alarm to create.
+     * @param threshold The threshold for the alarm. The meaning of this value depends on the alarm type
+     * @param seconds The minimum number of seconds before two alarms of the same
+     *             type will be generated (for instance, only send an alarm for
+     *             speeding once in a five-minute period)
+     * @param callback callback to give feedback on whether the alarm creation succeeds or not
+     */
+    public void createUriAlarm(final String uri, final AlarmType type, final float threshold,
+                               final int seconds, final WvaCallback<Void> callback) {
+        WvaCallback<Void> wrapped = WvaCallback.wrap(callback, this.uiThreadHandler);
+
+        try {
+            vehicleData.createUriAlarm(uri, type, threshold, seconds, wrapped);
+        } catch (JSONException e) {
+            Log.e(TAG, "Incorrect formatting in WVA.createUriAlarm", e);
+            if (wrapped != null) wrapped.onResponse(e, null);
+        }
+    }
+
+    /**
+     * Calls {@link #createUriAlarm(String, AlarmType, float, int, WvaCallback)} with a null callback,
+     * meaning no direct feedback as to the success or failure of the request will be available.
+     */
+    public void createUriAlarm(final String uri, final AlarmType type, final float threshold,
+                               final int seconds) {
+        createUriAlarm(uri, type, threshold, seconds, null);
+    }
+
+    /**
      * Removes the alarm on the given vehicle data endpoint on the WVA, by deleting
      * the alarm record on the device.
      *
@@ -903,8 +1224,30 @@ public class WVA {
     }
 
     /**
+     * Removes the alarm on the given web services URI on the WVA, by deleting
+     * the alarm record on the device.
+     *
+     * @since 2.1.0
+     *
+     * @param uri The web services URI to remove an alarm from
+     * @param type The type of alarm which should be removed
+     * @param callback callback to give feedback on whether the alarm deletion succeeds or not
+     */
+    public void deleteUriAlarm(final String uri, final AlarmType type, WvaCallback<Void> callback) {
+        vehicleData.deleteUriAlarm(uri, type, WvaCallback.wrap(callback, this.uiThreadHandler));
+    }
+
+    /**
+     * Calls {@link #deleteUriAlarm(String, AlarmType, WvaCallback)} with a null callback,
+     * meaning no direct feedback as to the success or failure of the request will be available.
+     */
+    public void deleteUriAlarm(final String uri, final AlarmType type) {
+        deleteUriAlarm(uri, type, null);
+    }
+
+    /**
      * Synchronously returns the last value received by this library for a
-     * given endpoint. No networking is involved in this request.
+     * given vehicle data endpoint. No networking is involved in this request.
      *
      * <p>This cached value is only updated by subscriptions, alarms, and
      * direct querying of the data through the library.</p>
@@ -919,6 +1262,27 @@ public class WVA {
      */
     public VehicleDataResponse getCachedVehicleData(final String endpoint) {
         return vehicleData.getCachedVehicleData(endpoint);
+    }
+
+    /**
+     * Synchronously returns the last value received by this library for a given
+     * URI. No network is involved in this request.
+     *
+     * <p>This cached value is only updated by subscriptions, alarms, and direct querying
+     * of the data through the library.</p>
+     *
+     * @see #subscribeToUri(String, int, WvaCallback)
+     * @see #createUriAlarm(String, AlarmType, float, int, WvaCallback)
+     * @see #uriGet(String, WvaCallback)
+     *
+     * @since 2.1.0
+     *
+     * @param uri the web services URI to look up
+     * @return most recent, cached value for the given URI, or null if no value is cached
+     *          currently
+     */
+    public VehicleDataResponse getCachedDataAtUri(final String uri) {
+        return vehicleData.getCachedDataAtUri(uri);
     }
 
     /**

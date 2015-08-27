@@ -33,7 +33,7 @@ import java.util.concurrent.BlockingQueue;
  */
 public class EventChannel extends Thread {
     private static final int MAX_LENGTH = 500;
-    private static final String TAG = "com.digi.wva.internal.EventChannel";
+    private static final String TAG = "wvalib EventChannel";
     private boolean running;
     private String hostname;
     private int port;

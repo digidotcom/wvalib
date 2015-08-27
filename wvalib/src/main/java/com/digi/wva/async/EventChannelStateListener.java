@@ -21,6 +21,7 @@ import java.io.IOException;
  * the remote end of the socket closing.
  */
 public abstract class EventChannelStateListener implements MainThreadOptional {
+    private static final String TAG = "wvalib E.C.S.Listener";
     private boolean shouldNotReconnect;
 
     /**
@@ -68,13 +69,12 @@ public abstract class EventChannelStateListener implements MainThreadOptional {
                     // An interruption will presumably be caused by us wanting to
                     // stop this thread... so let's abort the whole reconnection
                     // process.
-                    Log.e("EventChannelStateListener",
-                            "Sleep before disconnect-reconnect was interrupted!", e);
+                    Log.e(TAG, "Sleep before disconnect-reconnect was interrupted!", e);
                     return;
                 }
 
                 if (shouldNotReconnect) {
-                    Log.i("EventChannelStateListener", "Listener has been directed not to reconnect.");
+                    Log.i(TAG, "Listener has been directed not to reconnect.");
                     return;
                 }
 

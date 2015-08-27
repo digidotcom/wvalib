@@ -24,7 +24,13 @@ public class VehicleDataResponse extends AbstractVehicleResponse<Double> {
      *         {"value":&lt;double&gt;, "timestamp":&lt;ISO8601 timestamp&gt;}
      */
     public VehicleDataResponse(JSONObject from) throws JSONException {
-        super(from.getDouble("value"), from.getString("timestamp"));
+        super(null, from.getString("timestamp"), null);
+
+        // Grab the value in both "raw" and parsed form.
+        this.setRawValue(from.get("value"));
+
+        double doubleValue = from.optDouble("value");
+        this.setValue(Double.isNaN(doubleValue) ? null : doubleValue);
     }
 }
 

@@ -33,6 +33,8 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.net.Inet4Address;
+import java.net.InetAddress;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
@@ -45,6 +47,7 @@ import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 @SuppressWarnings("unchecked")
@@ -92,6 +95,14 @@ public class WVATest extends TestCase {
         assertNotNull(mockedWVA);
     }
 
+    public void testInetAddressConstructor() throws Exception {
+        Inet4Address address = (Inet4Address) InetAddress.getByName("1.2.3.4");
+
+        // This constructor should get the hostname out of the given Inet4Address and use that.
+        WVA wva = new WVA(address);
+        assertEquals("1.2.3.4", wva.getHostName());
+    }
+
     public void testBasicAuthMethods() {
         HttpClient mockHttp = mock(HttpClient.class);
         WVA mock = WVA.getDevice(hostname, mockHttp, vehSpy, mEcus, mHw, mFc);
@@ -116,6 +127,29 @@ public class WVATest extends TestCase {
         verify(mockHttp).setHttpPort(111);
         mock.setHttpsPort(222);
         verify(mockHttp).setHttpsPort(222);
+    }
+
+    public void testHttpLoggingMethods() {
+        HttpClient mockHttp = mock(HttpClient.class);
+        WVA mock = WVA.getDevice(hostname, mockHttp, vehSpy, mEcus, mHw, mFc);
+
+        // Check that getHttpLoggingEnabled returns the HTTP client's value.
+        // First with logging enabled...
+        when(mockHttp.getLoggingEnabled()).thenReturn(true);
+        assertTrue(mock.getHttpLoggingEnabled());
+        verify(mockHttp).getLoggingEnabled();
+        reset(mockHttp);
+        // ...then with logging disabled.
+        when(mockHttp.getLoggingEnabled()).thenReturn(false);
+        assertFalse(mock.getHttpLoggingEnabled());
+        verify(mockHttp).getLoggingEnabled();
+
+        // Check that setHttpLoggingEnabled sets the HTTP client's value
+        mock.setHttpLoggingEnabled(true);
+        verify(mockHttp).setLoggingEnabled(true);
+        reset(mockHttp);
+        mock.setHttpLoggingEnabled(false);
+        verify(mockHttp).setLoggingEnabled(false);
     }
 
     public void testFetchLedNames() throws Exception {
@@ -307,6 +341,120 @@ public class WVATest extends TestCase {
         }
     }
 
+    public void testUriGet() throws JSONException {
+        PassFailCallback<JSONObject> cb = new PassFailCallback<JSONObject>() {
+            @Override
+            public boolean runsOnUiThread() {
+                return false;
+            }
+        };
+
+        JSONObject o = new JSONObject();
+        o.put("data", "hello world");
+
+        // Success
+        httpClient.success = true;
+        httpClient.returnObject = o;
+        mockedWVA.uriGet("hello_world", cb);
+        assertTrue(cb.success);
+        assertNull(cb.error);
+        assertEquals(o, cb.response);
+        assertEquals("GET hello_world", httpClient.requestSummary);
+
+        // Error
+        httpClient.success = false;
+        httpClient.failWith = new WvaHttpException.WvaHttpNotFound("/ws/hello_world", null);
+        mockedWVA.uriGet("hello_world", cb);
+        assertFalse(cb.success);
+        assertNotNull(cb.error);
+        assertEquals(httpClient.failWith, cb.error);
+        assertEquals("GET hello_world", httpClient.requestSummary);
+    }
+
+    public void testUriGet_Null() {
+        try {
+            mockedWVA.uriGet("path", null);
+            fail("uriGet should throw on null callback");
+        } catch (NullPointerException e) {
+            assertEquals("uriGet callback must not be null!", e.getMessage());
+        }
+    }
+
+    public void testUriPut() throws JSONException {
+        PassFailCallback<JSONObject> cb = new PassFailCallback<JSONObject>() {
+            @Override
+            public boolean runsOnUiThread() {
+                return false;
+            }
+        };
+
+        JSONObject o = new JSONObject();
+        o.put("data", "hello world");
+
+        // Success
+        httpClient.success = true;
+        httpClient.returnObject = o;
+        mockedWVA.uriPut("hello_world", o, cb);
+        assertTrue(cb.success);
+        assertNull(cb.error);
+        assertEquals(o, cb.response);
+        assertEquals("PUT hello_world", httpClient.requestSummary);
+
+        // Error
+        httpClient.success = false;
+        httpClient.failWith = new WvaHttpException.WvaHttpNotFound("/ws/hello_world", null);
+        mockedWVA.uriPut("hello_world", o, cb);
+        assertFalse(cb.success);
+        assertNotNull(cb.error);
+        assertEquals(httpClient.failWith, cb.error);
+        assertEquals("PUT hello_world", httpClient.requestSummary);
+    }
+
+    public void testUriDelete() throws Exception {
+        PassFailCallback<Void> successCb = new PassFailCallback<Void>() {
+                    @Override
+                    public boolean runsOnUiThread() {
+                        return false;
+                    }
+                },
+                nonEmptyCb = new PassFailCallback<Void>() {
+                    @Override
+                    public boolean runsOnUiThread() {
+                        return false;
+                    }
+                },
+                failureCb = new PassFailCallback<Void>() {
+                    @Override
+                    public boolean runsOnUiThread() {
+                        return false;
+                    }
+                };
+
+        // Success
+        httpClient.success = true;
+        httpClient.returnObject = null;
+        mockedWVA.uriDelete("files/userfs/WEB/python/file.txt", successCb);
+        assertTrue(successCb.success);
+        assertNull(successCb.error);
+        assertEquals("DELETE files/userfs/WEB/python/file.txt", httpClient.requestSummary);
+
+        // Non-empty body
+        httpClient.success = true;
+        httpClient.returnObject = new JSONObject();
+        mockedWVA.uriDelete("files/userfs/WEB/python/file.txt", nonEmptyCb);
+        assertFalse(nonEmptyCb.success);
+        assertNotNull(nonEmptyCb.error);
+        assertEquals("Unexpected response body: {}", nonEmptyCb.error.getMessage());
+
+        // Error
+        httpClient.success = false;
+        httpClient.failWith = new Exception("Delete Failure");
+        mockedWVA.uriDelete("files/userfs/WEB/python/file.txt", failureCb);
+        assertFalse(failureCb.success);
+        assertNotNull(failureCb.error);
+        assertEquals(httpClient.failWith, failureCb.error);
+    }
+
     public void testFetchVehicleDataEndpoints() throws Exception {
         mockedWVA.fetchVehicleDataEndpoints(mCbSet);
         verify(mVeh).fetchVehicleDataEndpoints(any(WvaCallback.class));
@@ -326,6 +474,20 @@ public class WVATest extends TestCase {
         verify(mVeh, times(2)).unsubscribe("EngineSpeed", null);
     }
 
+    public void testSubscribeToUri() throws Exception {
+        mockedWVA.subscribeToUri("vehicle/ignition", 10, null);
+        mockedWVA.subscribeToUri("vehicle/ignition", 10);
+
+        verify(mVeh, times(2)).subscribeToUri("vehicle/ignition", 10, null);
+    }
+
+    public void testUnsubscribeFromUri() throws Exception {
+        mockedWVA.unsubscribeFromUri("vehicle/ignition", null);
+        mockedWVA.unsubscribeFromUri("vehicle/ignition");
+
+        verify(mVeh, times(2)).unsubscribeFromUri("vehicle/ignition", null);
+    }
+
     public void testCreateVehicleDataAlarm() throws Exception {
         mockedWVA.createVehicleDataAlarm("DriverIncome", AlarmType.ABOVE, 20, 10, null);
         mockedWVA.createVehicleDataAlarm("DriverIncome", AlarmType.ABOVE, 20, 10);
@@ -340,6 +502,20 @@ public class WVATest extends TestCase {
         verify(mVeh, times(2)).deleteAlarm("DriverIncome", AlarmType.ABOVE, null);
     }
 
+    public void testCreateUriAlarm() throws Exception {
+        mockedWVA.createUriAlarm("vehicle/ignition", AlarmType.CHANGE, 0, 10, null);
+        mockedWVA.createUriAlarm("vehicle/ignition", AlarmType.CHANGE, 0, 10);
+
+        verify(mVeh, times(2)).createUriAlarm("vehicle/ignition", AlarmType.CHANGE, 0, 10, null);
+    }
+
+    public void testDeleteUriAlarm() throws Exception {
+        mockedWVA.deleteUriAlarm("vehicle/ignition", AlarmType.CHANGE, null);
+        mockedWVA.deleteUriAlarm("vehicle/ignition", AlarmType.CHANGE);
+
+        verify(mVeh, times(2)).deleteUriAlarm("vehicle/ignition", AlarmType.CHANGE, null);
+    }
+
     public void testGetCachedVehicleData() throws Exception {
         VehicleDataResponse lastResp = new VehicleDataResponse(jsonFactory.valTimeObj());
 
@@ -352,6 +528,21 @@ public class WVATest extends TestCase {
         // returned), getCachedVehicleData also returns null
         when(vehSpy.getCachedVehicleData(anyString())).thenReturn(null);
         VehicleDataResponse badResp = mockedWvaVehicleSpy.getCachedVehicleData("not in endpoint set");
+        assertNull(badResp);
+    }
+
+    public void testGetCachedDataAtUri() throws Exception {
+        VehicleDataResponse lastResp = new VehicleDataResponse(jsonFactory.valTimeObj());
+
+        // If cached value is found, getCachedDataAtUri returns it.
+        when(vehSpy.getCachedDataAtUri("vehicle/ignition")).thenReturn(lastResp);
+        VehicleDataResponse newResp = mockedWvaVehicleSpy.getCachedDataAtUri("vehicle/ignition");
+        assertEquals(lastResp, newResp);
+
+        // If the cache is initialized but the endpoint is unrecognized (null is returned),
+        // getCachedDataAtUri also returns null.
+        when(vehSpy.getCachedDataAtUri("vehicle/ignition")).thenReturn(null);
+        VehicleDataResponse badResp = mockedWvaVehicleSpy.getCachedDataAtUri("vehicle/ignition");
         assertNull(badResp);
     }
 
@@ -378,6 +569,9 @@ public class WVATest extends TestCase {
         mockedWVA.removeVehicleDataListener();
         verify(mVeh).removeVehicleDataListener();
 
+        // Purely for code coverage, since we can't analyze log messages.
+        mockedWVA.setVehicleDataListener(null);
+
         try {
             mockedWVA.setVehicleDataListener("EngineSpeed", null);
             fail("setVehicleDataListener with null listener should throw");
@@ -393,9 +587,35 @@ public class WVATest extends TestCase {
         verify(mVeh).removeVehicleDataListener("EngineSpeed");
     }
 
+    public void testSetUriListener() {
+        mockedWVA.setUriListener("vehicle/ignition", mListener);
+        verify(mVeh).setUriListener("vehicle/ignition", mListener);
+
+        try {
+            mockedWVA.setUriListener("vehicle/ignition", null);
+            fail("setUriListener with null listener should throw");
+        } catch (NullPointerException e) {
+            // The exception should point the user to removeUriListener
+            assertTrue("No mention of removeUriListener in '" + e.getMessage() + "'",
+                    e.getMessage().contains("removeUriListener"));
+
+            verify(mVeh, never()).setUriListener("vehicle/ignition", null);
+        }
+
+        mockedWVA.removeUriListener("vehicle/ignition");
+        verify(mVeh).removeUriListener("vehicle/ignition");
+
+        // Purely for code coverage, since we have no way to analyze log messages.
+        // (Need to use the spy version here, so that we actually call the real method.)
+        mockedWvaVehicleSpy.setUriListener("vehicle/data/foo", mListener);
+        verify(vehSpy).setUriListener("vehicle/data/foo", mListener);
+        mockedWvaVehicleSpy.removeUriListener("vehicle/data/foo");
+        verify(vehSpy).removeUriListener("vehicle/data/foo");
+    }
+
     public void testRemoveAllVehicleDataListeners() {
-             mockedWVA.removeAllVehicleDataListeners();
-             verify(mVeh).removeAllListeners();
+        mockedWVA.removeAllVehicleDataListeners();
+        verify(mVeh).removeAllListeners();
     }
 
     public void testSetFaultCodeListener() {

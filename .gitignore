@@ -41,3 +41,6 @@ local.properties
 # Gradle cache
 .gradle
 *~
+
+# Proguard files (we aren't going to use ProGuard)
+proguard-rules.pro
