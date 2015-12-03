@@ -43,8 +43,8 @@ public class VehicleData {
     private static final String VEHICLE_BASE = "vehicle/data/";
     private static final String SUBSCRIPTION_BASE = "subscriptions/";
     private static final String ALARM_BASE = "alarms/";
-    private static final boolean BUFFER_SUBSCRIPTIONS = true;
-    private static final boolean BUFFER_ALARMS = true;
+    private static final boolean BUFFER_SUBSCRIPTIONS = false;
+    private static final boolean BUFFER_ALARMS = false;
     /**
      * Suffix used to create the default short names for subscriptions. Appended onto the
      * endpoint name, e.g. {@code "EngineSpeed"} becomes {@code "EngineSpeed~sub"}.

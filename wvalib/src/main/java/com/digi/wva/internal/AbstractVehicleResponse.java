@@ -7,7 +7,7 @@
 
 package com.digi.wva.internal;
 
-import org.joda.time.DateTime;
+import java.util.Date;
 
 import com.digi.wva.WVA;
 import com.digi.wva.util.WvaUtil;
@@ -45,7 +45,7 @@ import com.digi.wva.util.WvaUtil;
 public abstract class AbstractVehicleResponse<V> {
     private Object rawValue;
     private V value;
-    private DateTime time;
+    private Date time;
 
     /**
      * Internal method to set the raw value field.
@@ -94,7 +94,7 @@ public abstract class AbstractVehicleResponse<V> {
     /**
      * @return the timestamp associated with this response value
      */
-    public final DateTime getTime() {
+    public final Date getTime() {
         return this.time;
     }
 

@@ -9,7 +9,7 @@ package com.digi.wva.async;
 
 import com.digi.wva.internal.AbstractEvent;
 
-import org.joda.time.DateTime;
+import java.util.Date;
 
 
 
@@ -28,7 +28,7 @@ public class VehicleDataEvent extends AbstractEvent<VehicleDataResponse> {
      * @param shortName the shortname
      * @param response a representation of the event data/value
      */
-    public VehicleDataEvent(EventFactory.Type type, String uri, String endpoint, DateTime sent, String shortName,
+    public VehicleDataEvent(EventFactory.Type type, String uri, String endpoint, Date sent, String shortName,
                                VehicleDataResponse response) {
         super(type, uri, endpoint, sent, shortName, response);
     }

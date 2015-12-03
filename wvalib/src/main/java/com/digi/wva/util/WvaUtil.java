@@ -13,6 +13,8 @@ import org.joda.time.DateTime;
 import org.joda.time.format.DateTimeFormatter;
 import org.joda.time.format.ISODateTimeFormat;
 
+import java.util.Date;
+
 /**
  * Utility methods for the WVA Android library.
  */
@@ -29,18 +31,18 @@ public final class WvaUtil {
     private WvaUtil() {}
 
     /**
-     * Parse the given time string into a corresponding {@link DateTime} object.
+     * Parse the given time string into a corresponding {@link Date} object.
      * @param timestamp the time string to parse
-     * @return the parsed {@link DateTime} object
+     * @return the parsed {@link Date} object
      */
-    public static DateTime dateTimeFromString(String timestamp) {
+    public static Date dateTimeFromString(String timestamp) {
         try {
-            return format.parseDateTime(timestamp);
+            return format.parseDateTime(timestamp).toDate();
         } catch (IllegalArgumentException e) {
             // Real WVA sends timestamps without milliseconds. If not connected
             // to "real" WVA (i.e. spoofer), we might be sending out timestamps
             // with milliseconds. In that case, parse it out here.
-           return formatMillis.parseDateTime(timestamp);
+           return formatMillis.parseDateTime(timestamp).toDate();
         }
     }
 

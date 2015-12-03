@@ -9,21 +9,20 @@ package com.digi.wva.internal;
 
 import com.digi.wva.async.EventFactory;
 
-import org.joda.time.DateTime;
-
+import java.util.Date;
 
 public abstract class AbstractEvent<R extends AbstractVehicleResponse<?>> {
 
     private EventFactory.Type type;
     private String uri, shortName, endpoint;
-    private DateTime sent;
+    private Date sent;
     private R response;
 
     /**
      * Base class for representing the contents of an event (received through the event channel).
      * @param <R> the type of data encapsulated by this event class
      */
-    protected AbstractEvent(EventFactory.Type type, String uri, String endpoint, DateTime sent, String shortName, R response) {
+    protected AbstractEvent(EventFactory.Type type, String uri, String endpoint, Date sent, String shortName, R response) {
         this.type = type;
         this.uri = uri;
         this.endpoint = endpoint;
@@ -63,7 +62,7 @@ public abstract class AbstractEvent<R extends AbstractVehicleResponse<?>> {
     /**
      * @return the timestamp of the event message
      */
-    public final DateTime getSent() {
+    public final Date getSent() {
         return sent;
     }
 

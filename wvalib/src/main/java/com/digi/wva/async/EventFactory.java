@@ -7,11 +7,11 @@
 
 package com.digi.wva.async;
 
-import org.joda.time.DateTime;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import android.util.Log;
+import java.util.Date;
 
 import com.digi.wva.internal.AbstractEvent;
 import com.digi.wva.util.WvaUtil;
@@ -37,7 +37,7 @@ public final class EventFactory {
     public static AbstractEvent<?> fromTCP(JSONObject obj) throws JSONException {
         Type type;
         String uri, shortName;
-        DateTime sent;
+        Date sent;
 
         if (!obj.isNull("alarm")) {
             // This is an alarm event

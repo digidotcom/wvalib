@@ -30,13 +30,13 @@ import com.digi.wva.internal.HttpClient.ExpectEmptyCallback;
 import com.digi.wva.internal.VehicleData;
 import com.digi.wva.util.WvaUtil;
 
-import org.joda.time.DateTime;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.net.Inet4Address;
 import java.util.Set;
+import java.util.Date;
 
 /**
  * Configures and manages interactions with the WVA device. Most applications can use just
@@ -1584,17 +1584,31 @@ public class WVA {
     /**
      * Asynchronously sends a request to the WVA to set its time to match the given value.
      *
-     * <p>The WVA Android library will automatically convert the {@link DateTime} object
+     * <p>The WVA Android library will automatically convert the {@link Date} object
      * passed in here to UTC time, so that it is compatible with the WVA's web services.</p>
      *
-     * @param time The time to send to the WVA device (for example, {@link DateTime#now()})
+     * @param time The time to send to the WVA device
      * @param callback callback to be executed once the request has completed. The value passed in
      *                  is the value that was sent to the WVA (<b>time</b> converted to UTC)
      */
-    public void setTime(final DateTime time, final WvaCallback<DateTime> callback) {
-        WvaCallback<DateTime> wrapped = WvaCallback.wrap(callback, this.uiThreadHandler);
+    public void setTime(final Date time, final WvaCallback<Date> callback) {
+        WvaCallback<Date> wrapped = WvaCallback.wrap(callback, this.uiThreadHandler);
         try {
             hardware.setTime(time, wrapped);
+        } catch (JSONException e) {
+            if (callback != null) wrapped.onResponse(e, null);
+        }
+    }
+
+    /**
+     * Asynchronously sends a request to reboot WVA device.
+     *
+     * @param callback callback to be executed once the request has completed.
+     */
+    public void Reboot(final WvaCallback<Void> callback) {
+        WvaCallback<Void> wrapped = WvaCallback.wrap(callback, this.uiThreadHandler);
+        try {
+            hardware.Reboot(wrapped);
         } catch (JSONException e) {
             if (callback != null) wrapped.onResponse(e, null);
         }
@@ -1608,7 +1622,7 @@ public class WVA {
      *
      * @throws NullPointerException if <b>callback</b> is null
      */
-    public void fetchTime(final WvaCallback<DateTime> callback) {
+    public void fetchTime(final WvaCallback<Date> callback) {
         if (callback == null) throw new NullPointerException("Callback should not be null!");
         hardware.fetchTime(WvaCallback.wrap(callback, this.uiThreadHandler));
     }

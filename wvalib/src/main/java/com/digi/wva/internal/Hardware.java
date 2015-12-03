@@ -24,6 +24,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.Date;
 
 /** This class allows interaction with hardware components of the WVA gateway itself rather than
  * the vehicle to which it is attached. These are located under the {@code hw} web services tree.
@@ -34,6 +35,7 @@ public class Hardware {
     private static final String LED_BASE = "hw/leds/";
     private static final String BUTTON_BASE = "hw/buttons/";
     private static final String TIME_BASE = "hw/time/";
+    private static final String REBOOT_BASE = "hw/reboot/";
     private static final String LED_KEY = "leds";
     private static final String BUTTON_KEY = "buttons";
 
@@ -217,14 +219,14 @@ public class Hardware {
     /**
      * Underlying implementation of {@link com.digi.wva.WVA#fetchTime(WvaCallback)}
      */
-    public void fetchTime(final WvaCallback<DateTime> cb) {
+    public void fetchTime(final WvaCallback<Date> cb) {
         httpClient.get(TIME_BASE, new HttpClient.HttpCallback() {
             @Override
             public void onSuccess(JSONObject timeObj) {
                 String timeStr;
                 try {
                     timeStr = timeObj.getString("time");
-                    cb.onResponse(null, format.parseDateTime(timeStr));
+                    cb.onResponse(null, format.parseDateTime(timeStr).toDate());
                 } catch (JSONException e) {
                     Log.w(TAG, "unable to get time.");
                     cb.onResponse(e, null);
@@ -239,14 +241,15 @@ public class Hardware {
     }
 
     /**
-     * Underlying implementation of {@link com.digi.wva.WVA#setTime(DateTime, WvaCallback)}
+     * Underlying implementation of {@link com.digi.wva.WVA#setTime(Date, WvaCallback)}
      *
      * @throws JSONException if an error occurs while creating the request
      */
-    public void setTime(final DateTime newTime, final WvaCallback<DateTime> cb) throws JSONException {
+    public void setTime(final Date newTime, final WvaCallback<Date> cb) throws JSONException {
         JSONObject time = new JSONObject();
 
-        final DateTime newTimeUTC = newTime.toDateTime(DateTimeZone.UTC);
+        DateTime dateTime = new DateTime(newTime);
+        final DateTime newTimeUTC = dateTime.toDateTime(DateTimeZone.UTC);
 
         final String timestamp = format.print(newTimeUTC);
         Log.i(TAG, "Sending timestamp down: " + timestamp);
@@ -256,7 +259,7 @@ public class Hardware {
             @Override
             public void onSuccess() {
                 if (cb != null) {
-                    cb.onResponse(null, newTimeUTC);
+                    cb.onResponse(null, newTimeUTC.toDate());
                 }
             }
 
@@ -270,7 +273,38 @@ public class Hardware {
             public void onFailure(Throwable error) {
                 Log.e(TAG, "Failed to set WVA device time to " + timestamp, error);
                 if (cb != null) {
-                    cb.onResponse(error, newTimeUTC);
+                    cb.onResponse(error, newTimeUTC.toDate());
+                }
+            }
+        });
+    }
+
+    /**
+     * Underlying implementation of {@link com.digi.wva.WVA#Reboot(WvaCallback)}
+     *
+     * @throws JSONException if an error occurs while creating the request
+     */
+    public void Reboot(final WvaCallback<Void> cb) throws JSONException {
+
+        httpClient.put(REBOOT_BASE, null, new HttpClient.ExpectEmptyCallback() {
+            @Override
+            public void onSuccess() {
+                if (cb != null) {
+                    cb.onResponse(null, null);
+                }
+            }
+
+            @Override
+            public void onBodyNotEmpty(String body) {
+                Log.e(TAG, "setTime got unexpected response body content:\n" + body);
+                onFailure(new Exception("Unexpected response body: " + body));
+            }
+
+            @Override
+            public void onFailure(Throwable error) {
+                Log.e(TAG, "Failed to reboot WVA device", error);
+                if (cb != null) {
+                    cb.onResponse(error, null);
                 }
             }
         });

@@ -9,7 +9,7 @@ package com.digi.wva.async;
 
 import com.digi.wva.internal.AbstractEvent;
 
-import org.joda.time.DateTime;
+import java.util.Date;
 
 /**
  * Encapsulation of an event containing fault code data.
@@ -30,7 +30,7 @@ public class FaultCodeEvent extends AbstractEvent<FaultCodeResponse> {
      * @param shortName the short name (the {@code "short_name" field})
      * @param response a representation of the event data/value
      */
-    public FaultCodeEvent(EventFactory.Type type, String uri, String endpoint, DateTime sent,
+    public FaultCodeEvent(EventFactory.Type type, String uri, String endpoint, Date sent,
                           String shortName,
                           FaultCodeResponse response) {
         super(type, uri, endpoint, sent, shortName, response);
