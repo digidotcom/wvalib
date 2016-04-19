@@ -1,6 +1,6 @@
 buildscript {
     dependencies {
-        classpath 'com.github.dcendents:android-maven-plugin:1.2'
+        classpath 'com.github.dcendents:android-maven-gradle-plugin:1.3'
         classpath 'org.apache.maven.wagon:wagon-http:2.2'
     }
     // Based on https://github.com/Netflix/gradle-template build.gradle
@@ -9,7 +9,7 @@ buildscript {
 
 apply plugin: 'com.android.library'
 apply plugin: 'maven'
-apply plugin: 'android-maven'
+apply plugin: 'com.github.dcendents.android-maven'
 
 // High-level project settings
 project.ext {
@@ -31,28 +31,29 @@ project.ext {
 
 import groovy.io.FileType
 
-version '2.1.0.rc1' + versionSuffix
+version '2.1.0.rc2' + versionSuffix
 group 'com.digi.wva'
 
 dependencies {
-    compile 'com.squareup.okio:okio:1.0.0'
+    compile 'com.squareup.okio:okio:1.1.0'
     compile 'com.squareup.okhttp:okhttp:2.0.0'
     compile 'joda-time:joda-time:2.2'
 
     // Testing dependencies
-    androidTestCompile files('libs/dexmaker-1.0.jar')
-    androidTestCompile files('libs/dexmaker-mockito-1.0.jar')
-    androidTestCompile files('libs/mockito-all-1.9.5.jar')
+    androidTestCompile 'com.google.dexmaker:dexmaker:1.2'
+    androidTestCompile 'com.google.dexmaker:dexmaker-mockito:1.2'
     androidTestCompile files('libs/mockwebserver-2.0.0.jar')
 }
 
 android {
-    compileSdkVersion 22
-    buildToolsVersion "22.0.1"
+    compileSdkVersion 23
+    buildToolsVersion "23.0.3"
+
+    compileOptions.incremental = false
 
     defaultConfig {
         minSdkVersion 9
-        targetSdkVersion 22
+        targetSdkVersion 23
 
         testApplicationId "com.digi.wva.test"
         testInstrumentationRunner "com.digi.wva.WVATestRunner"
@@ -61,7 +62,8 @@ android {
     }
 
     // Don't publish the AAR file for this library. (The JAR is sufficient.)
-    defaultPublishConfig null
+    // TODO: Setting this to null causes an NPE in the Android library plugin 2.0.0.
+    // defaultPublishConfig null
 
     buildTypes.debug {
         testCoverageEnabled true
@@ -111,6 +113,10 @@ android {
             exclude '**/R.java'
 
             options.use true
+            
+            // JDK 8 Javadoc is very strict, and our docs are not formatted the greatest.
+            // Disable doclint for now.
+            options.addStringOption('Xdoclint:none', '-quiet')
 
             doLast {
                 // Make all the external Javadoc references open in new windows.

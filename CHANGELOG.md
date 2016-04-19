@@ -1,3 +1,10 @@
+# 2.1.0.rc2
+
+**Improvements/new features**
+
+  * Update build scripts to be compatible with Android Studio 2.0 and the latest Android SDK build
+    tools.
+
 # 2.1.0.rc1
 
 **Improvements/new features**
