@@ -7,6 +7,7 @@
 
 package com.digi.wva.internal;
 
+import android.os.Build;
 import android.util.Log;
 
 import com.digi.wva.exc.WvaHttpException;
@@ -175,26 +176,11 @@ public class HttpClient {
     private static SSLSocketFactory makeSSLSocketFactory() {
         // based on information from:
         // http://engineering.sproutsocial.com/2013/09/android-using-volley-and-loopj-with-self-signed-certificates/
+        // http://blog.dev-area.net/2015/08/13/android-4-1-enable-tls-1-1-and-tls-1-2/
         try {
-            SSLContext context = SSLContext.getInstance("TLS");
-            context.init(null, new X509TrustManager[]{new X509TrustManager() {
-                @Override
-                public X509Certificate[] getAcceptedIssuers() {
-                    return null;
-                }
-
-                @Override
-                public void checkServerTrusted(X509Certificate[] chain, String authType)
-                        throws CertificateException {
-                }
-
-                @Override
-                public void checkClientTrusted(X509Certificate[] chain, String authType)
-                        throws CertificateException {
-                }
-            }}, null);
-
-            return context.getSocketFactory();
+            // Support TLSv1.2 on API 16+
+            int currentAPIVersion = android.os.Build.VERSION.SDK_INT;
+            return (currentAPIVersion >= Build.VERSION_CODES.JELLY_BEAN) ? new TLSSocketFactory("TLSv1.2") : new TLSSocketFactory("TLS");
         } catch (NoSuchAlgorithmException e) {
             return null;
         } catch (KeyManagementException e) {
