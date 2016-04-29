@@ -30,6 +30,9 @@ import org.json.JSONObject;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.net.InetAddress;
+import java.net.Socket;
+import java.net.UnknownHostException;
 import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
 import java.security.cert.CertificateException;
@@ -39,6 +42,7 @@ import java.util.Locale;
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSession;
+import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.X509TrustManager;
 
@@ -167,16 +171,11 @@ public class HttpClient {
     private final String hostname;
     private final OkHttpClient client;
 
-    /**
-     * Returns an SSLSocketFactory which trusts any certificate. (Needed in order to connect
-     * with the WVA when using HTTPS.)
-     * @return an SSLSocketFactory which trusts all certificates
-     */
-    private static SSLSocketFactory makeSSLSocketFactory() {
-        // based on information from:
-        // http://engineering.sproutsocial.com/2013/09/android-using-volley-and-loopj-with-self-signed-certificates/
-        try {
-            SSLContext context = SSLContext.getInstance("TLS");
+	public class TLSSocketFactory extends SSLSocketFactory {
+		private SSLSocketFactory internalSSLSocketFactory;
+
+		public TLSSocketFactory() throws KeyManagementException, NoSuchAlgorithmException {
+			SSLContext context = SSLContext.getInstance("TLS");
             context.init(null, new X509TrustManager[]{new X509TrustManager() {
                 @Override
                 public X509Certificate[] getAcceptedIssuers() {
@@ -193,13 +192,67 @@ public class HttpClient {
                         throws CertificateException {
                 }
             }}, null);
+			internalSSLSocketFactory = context.getSocketFactory();
+		}
 
-            return context.getSocketFactory();
-        } catch (NoSuchAlgorithmException e) {
-            return null;
-        } catch (KeyManagementException e) {
-            return null;
-        }
+		@Override
+		public String[] getDefaultCipherSuites() {
+			return internalSSLSocketFactory.getDefaultCipherSuites();
+		}
+
+		@Override
+		public String[] getSupportedCipherSuites() {
+			return internalSSLSocketFactory.getSupportedCipherSuites();
+		}
+
+		@Override
+		public Socket createSocket(Socket s, String host, int port, boolean autoClose) throws IOException {
+			return enableTLSOnSocket(internalSSLSocketFactory.createSocket(s, host, port, autoClose));
+		}
+
+		@Override
+		public Socket createSocket(String host, int port) throws IOException, UnknownHostException {
+			return enableTLSOnSocket(internalSSLSocketFactory.createSocket(host, port));
+		}
+
+		@Override
+		public Socket createSocket(String host, int port, InetAddress localHost, int localPort) throws IOException, UnknownHostException {
+			return enableTLSOnSocket(internalSSLSocketFactory.createSocket(host, port, localHost, localPort));
+		}
+
+		@Override
+		public Socket createSocket(InetAddress host, int port) throws IOException {
+			return enableTLSOnSocket(internalSSLSocketFactory.createSocket(host, port));
+		}
+
+		@Override
+		public Socket createSocket(InetAddress address, int port, InetAddress localAddress, int localPort) throws IOException {
+			return enableTLSOnSocket(internalSSLSocketFactory.createSocket(address, port, localAddress, localPort));
+		}
+
+		private Socket enableTLSOnSocket(Socket socket) {
+			if(socket != null && (socket instanceof SSLSocket)) {
+				((SSLSocket)socket).setEnabledProtocols(new String[] {"TLSv1.2"});
+			}
+			return socket;
+		}
+	}
+
+    /**
+     * Returns an SSLSocketFactory which trusts any certificate. (Needed in order to connect
+     * with the WVA when using HTTPS.)
+     * @return an SSLSocketFactory which trusts all certificates
+     */
+    private SSLSocketFactory makeSSLSocketFactory() {
+		SSLSocketFactory factory = null;
+
+		try {
+			factory = new TLSSocketFactory();
+		} catch (NoSuchAlgorithmException e) {
+		} catch (KeyManagementException e) {
+		}
+
+		return factory;
     }
 
     /** Constructor
