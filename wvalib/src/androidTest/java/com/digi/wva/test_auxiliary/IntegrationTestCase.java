@@ -45,7 +45,7 @@ public class IntegrationTestCase extends TestCase {
 
         // Start the mock web server
         ws = new MockWebServer();
-        ws.play();
+        ws.start();
 
         // Point the WVA to the mock web server
         wva = new WVA("127.0.0.1");

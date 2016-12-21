@@ -170,7 +170,7 @@ public class EventChannelIntegrationTest extends IntegrationTestCase {
         }
 
         long timeToReconnect = times[1] - times[0];
-        // Allow 25 milliseconds of leeway.
-        assertTrue("Reconnect took " + timeToReconnect + " milliseconds", Math.abs(timeToReconnect - reconnectDelay) < 25);
+        // Allow 250 milliseconds of leeway.
+        assertTrue("Reconnect took " + timeToReconnect + " milliseconds", Math.abs(timeToReconnect - reconnectDelay) < 250);
     }
 }

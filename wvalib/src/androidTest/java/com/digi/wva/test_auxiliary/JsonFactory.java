@@ -270,7 +270,7 @@ public class JsonFactory {
         JSONObject infoObj = faultCodeValueObj("ecu0");
         try {
             infoObj.put("timestamp", "2007-03-01T12:00:00Z");
-            infoObj.put("uri", "vehicle/something_else/can0_active/ecu0");
+            infoObj.put("uri", "vehicl/something_else/can0_active/ecu0");
             infoObj.put("short_name", "ecu0~dtcsub");
 
             dataObj.put("data", infoObj);
@@ -279,5 +279,26 @@ public class JsonFactory {
         }
 
         return dataObj;
+    }
+
+    /**
+     * @return a JSON object representing vehicle/ignition event data
+     */
+    public JSONObject otherVehicleDataEvent() {
+        JSONObject outer = new JSONObject();
+        JSONObject inner = new JSONObject();
+
+        try {
+            inner.put("timestamp", "2015-08-25T10:55:00Z");
+            inner.put("uri", "vehicle/ignition");
+            inner.put("short_name", "vehicle~ignition~sub");
+            inner.put("ignition", "on");
+
+            outer.put("data", inner);
+        } catch (JSONException e) {
+            return null;
+        }
+
+        return outer;
     }
 }

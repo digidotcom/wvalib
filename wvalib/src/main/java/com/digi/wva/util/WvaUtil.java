@@ -65,6 +65,21 @@ public final class WvaUtil {
     }
 
     /**
+     * Convert a web services URI path into an escaped form suitable for use as a subscription name
+     * or something similar.
+     *
+     * @param uri the string to escape
+     * @return the escaped string, or null if <b>uri</b> is null or empty
+     */
+    public static String getEscapedStringFromUri(String uri) {
+        if (TextUtils.isEmpty(uri)) {
+            return null;
+        } else {
+            return uri.replace('/', '~');
+        }
+    }
+
+    /**
      * Given a web services URI or sub-path, intelligently parse out the correct top-level key
      * to use when applying configuration to the WVA.
      *

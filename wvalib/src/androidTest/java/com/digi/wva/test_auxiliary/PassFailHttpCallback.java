@@ -36,7 +36,7 @@ public class PassFailHttpCallback extends HttpCallback {
     }
 
     // Wait up to 15 seconds for the callback to be executed.
-    public static final long TIMEOUT_MILLIS = TimeUnit.SECONDS.toMillis(15);
+    public static final long TIMEOUT_MILLIS = TimeUnit.SECONDS.toMillis(30);
     private final List<RecordedResponse> responses = new ArrayList<RecordedResponse>();
 
     @Override

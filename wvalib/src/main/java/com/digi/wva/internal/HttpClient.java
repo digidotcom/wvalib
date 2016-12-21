@@ -30,6 +30,9 @@ import org.json.JSONObject;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.net.InetAddress;
+import java.net.Socket;
+import java.net.UnknownHostException;
 import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
 import java.security.cert.CertificateException;
@@ -39,6 +42,7 @@ import java.util.Locale;
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSession;
+import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.X509TrustManager;
 
@@ -143,7 +147,7 @@ public class HttpClient {
         }
     }
 
-    private static final String TAG = "com.digi.wva.internal.HttpClient";
+    private static final String TAG = "wvalib HttpClient";
     private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
 
     /**
@@ -154,19 +158,24 @@ public class HttpClient {
     private int httpPort = 80, httpsPort = 443;
     private boolean useSecureHttp;
 
+    /**
+     * If true, we will log outgoing requests and incoming responses as follows:
+     *
+     * Outgoing:
+     *     --> GET http://192.168.0.3/ws/vehicle/data
+     * Incoming:
+     *     <-- 200 GET http://192.168.0.3/ws/vehicle/data
+     */
+    private boolean doLogging = false;
+
     private final String hostname;
     private final OkHttpClient client;
 
-    /**
-     * Returns an SSLSocketFactory which trusts any certificate. (Needed in order to connect
-     * with the WVA when using HTTPS.)
-     * @return an SSLSocketFactory which trusts all certificates
-     */
-    private static SSLSocketFactory makeSSLSocketFactory() {
-        // based on information from:
-        // http://engineering.sproutsocial.com/2013/09/android-using-volley-and-loopj-with-self-signed-certificates/
-        try {
-            SSLContext context = SSLContext.getInstance("TLS");
+	public class TLSSocketFactory extends SSLSocketFactory {
+		private SSLSocketFactory internalSSLSocketFactory;
+
+		public TLSSocketFactory() throws KeyManagementException, NoSuchAlgorithmException {
+			SSLContext context = SSLContext.getInstance("TLS");
             context.init(null, new X509TrustManager[]{new X509TrustManager() {
                 @Override
                 public X509Certificate[] getAcceptedIssuers() {
@@ -183,13 +192,67 @@ public class HttpClient {
                         throws CertificateException {
                 }
             }}, null);
+			internalSSLSocketFactory = context.getSocketFactory();
+		}
 
-            return context.getSocketFactory();
-        } catch (NoSuchAlgorithmException e) {
-            return null;
-        } catch (KeyManagementException e) {
-            return null;
-        }
+		@Override
+		public String[] getDefaultCipherSuites() {
+			return internalSSLSocketFactory.getDefaultCipherSuites();
+		}
+
+		@Override
+		public String[] getSupportedCipherSuites() {
+			return internalSSLSocketFactory.getSupportedCipherSuites();
+		}
+
+		@Override
+		public Socket createSocket(Socket s, String host, int port, boolean autoClose) throws IOException {
+			return enableTLSOnSocket(internalSSLSocketFactory.createSocket(s, host, port, autoClose));
+		}
+
+		@Override
+		public Socket createSocket(String host, int port) throws IOException, UnknownHostException {
+			return enableTLSOnSocket(internalSSLSocketFactory.createSocket(host, port));
+		}
+
+		@Override
+		public Socket createSocket(String host, int port, InetAddress localHost, int localPort) throws IOException, UnknownHostException {
+			return enableTLSOnSocket(internalSSLSocketFactory.createSocket(host, port, localHost, localPort));
+		}
+
+		@Override
+		public Socket createSocket(InetAddress host, int port) throws IOException {
+			return enableTLSOnSocket(internalSSLSocketFactory.createSocket(host, port));
+		}
+
+		@Override
+		public Socket createSocket(InetAddress address, int port, InetAddress localAddress, int localPort) throws IOException {
+			return enableTLSOnSocket(internalSSLSocketFactory.createSocket(address, port, localAddress, localPort));
+		}
+
+		private Socket enableTLSOnSocket(Socket socket) {
+			if(socket != null && (socket instanceof SSLSocket)) {
+				((SSLSocket)socket).setEnabledProtocols(new String[] {"TLSv1.2"});
+			}
+			return socket;
+		}
+	}
+
+    /**
+     * Returns an SSLSocketFactory which trusts any certificate. (Needed in order to connect
+     * with the WVA when using HTTPS.)
+     * @return an SSLSocketFactory which trusts all certificates
+     */
+    private SSLSocketFactory makeSSLSocketFactory() {
+		SSLSocketFactory factory = null;
+
+		try {
+			factory = new TLSSocketFactory();
+		} catch (NoSuchAlgorithmException e) {
+		} catch (KeyManagementException e) {
+		}
+
+		return factory;
     }
 
     /** Constructor
@@ -205,6 +268,21 @@ public class HttpClient {
                 }
             });
         this.hostname = hostname;
+    }
+
+    /**
+     * @return true if HTTP logging is enabled
+     */
+    public boolean getLoggingEnabled() {
+        return this.doLogging;
+    }
+
+    /**
+     * Set whether all HTTP requests and responses should be logged to the standard Android logs
+     * @param enabled true if requests/responses should be logged, false otherwise
+     */
+    public void setLoggingEnabled(boolean enabled) {
+        this.doLogging = enabled;
     }
 
     /**
@@ -265,8 +343,9 @@ public class HttpClient {
         return new Callback() {
             @Override
             public void onResponse(Response response) throws IOException {
+                logResponse(response);
+
                 Request request = response.request();
-                Log.i(TAG, "\u2190 " + response.code() + " " + request.method() + " " + request.urlString());
                 String responseBody = response.body().string();
                 if (response.isSuccessful()) {
                     // Request succeeded. Parse JSON response.
@@ -338,7 +417,7 @@ public class HttpClient {
      * @param callback a callback for when the request completes or is in error
      */
     public void post(String url, JSONObject obj, HttpCallback callback) {
-        Request request = this.makeBuilder(url).post(this.makeBody(obj)).build();
+        Request request = this.makeBuilder(url).method("POST", this.makeBody(obj)).build();
         logRequest(request);
         client.newCall(request).enqueue(wrapCallback(callback));
     }
@@ -379,7 +458,64 @@ public class HttpClient {
      * </p>
      */
     protected void logRequest(Request request) {
+        if (!doLogging) {
+            // Logging is disabled - do nothing.
+            return;
+        }
+
         Log.i(TAG, "\u2192 " + request.method() + " " + request.urlString());
+    }
+
+    /**
+     * Log information of OkHttp Response objects
+     *
+     * <p>This method is protected, rather than private, due to a bug between JaCoCo and
+     * the Android build tools which causes the instrumented bytecode to be invalid when this
+     * method is private:
+     * <a href="http://stackoverflow.com/questions/17603192/dalvik-transformation-using-wrong-invoke-opcode" target="_blank">see StackOverflow question.</a>
+     * </p>
+     * @param response the HTTP response object to log
+     */
+    protected void logResponse(Response response) {
+        if (!doLogging) {
+            // Logging is disabled - do nothing.
+            return;
+        }
+
+        Request request = response.request();
+
+        StringBuilder log = new StringBuilder();
+        log.append(
+                // e.g. <-- 200 GET /ws/hw/leds/foo
+                String.format("\u2190 %d %s %s",
+                        response.code(), request.method(), request.urlString()));
+
+        // Add on lines tracking any redirects that occurred.
+        Response prior = response.priorResponse();
+        if (prior != null) {
+            // Call out that there were prior responses.
+            log.append(" (prior responses below)");
+
+            // Add a line to the log message for each prior response.
+            // (For most if not all responses, there will likely be just one.)
+            do {
+                log.append(
+                        String.format(
+                                "\n... prior response: %d %s %s",
+                                prior.code(), prior.request().method(), prior.request().urlString())
+                );
+
+                // If this is a redirect, log the URL we're being redirected to.
+                if (prior.isRedirect()) {
+                    log.append(", redirecting to ");
+                    log.append(prior.header("Location", "[no Location header found?!]"));
+                }
+
+                prior = prior.priorResponse();
+            } while (prior != null);
+        }
+
+        Log.i(TAG, log.toString());
     }
 
     /**

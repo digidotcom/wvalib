@@ -30,7 +30,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class Hardware {
     private static final DateTimeFormatter format = ISODateTimeFormat.dateTimeNoMillis();
-    private static final String TAG = "com.digi.wva.internal.Hardware";
+    private static final String TAG = "wvalib Hardware";
     private static final String LED_BASE = "hw/leds/";
     private static final String BUTTON_BASE = "hw/buttons/";
     private static final String TIME_BASE = "hw/time/";

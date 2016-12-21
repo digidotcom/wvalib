@@ -26,7 +26,6 @@ import java.io.PrintWriter;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.text.DecimalFormat;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -51,8 +50,6 @@ public class SimulatedEventChannel {
     private Thread worker;
 
     private final Object clientLock = new Object();
-
-    private DecimalFormat vehicleDataValueFormat = new DecimalFormat("#.00000");
 
     AtomicInteger alarmSequence = new AtomicInteger(),
                   dataSequence = new AtomicInteger();
@@ -91,6 +88,8 @@ public class SimulatedEventChannel {
                 synchronized (clientLock) {
                     client = socket.accept();
                     writer = new PrintWriter(client.getOutputStream(), true);
+
+                    clientLock.notifyAll();
                 }
 
                 while (runLoop) {
@@ -181,7 +180,7 @@ public class SimulatedEventChannel {
 
         // Make deep JSON object, copy timestamp
         JSONObject inner2 = new JSONObject().put("timestamp", inner.getString("timestamp"));
-        inner2.put("value", vehicleDataValueFormat.format(value));
+        inner2.put("value", value);
         // Place the deep object inside the inner one
         inner.put(endpoint, inner2);
 
@@ -289,6 +288,16 @@ public class SimulatedEventChannel {
      */
     public void triggerRemoteClose() {
         synchronized (clientLock) {
+            if (client == null) {
+                try {
+                    // If the test code is calling triggerRemoteClose, it should be because we expect
+                    // there to already be a connection. Let's wait for up to 5 seconds for that to
+                    // happen.
+                    clientLock.wait(5000);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
             if (client == null) {
                 Log.d(TAG, "triggerRemoteClose called without client socket");
             } else {

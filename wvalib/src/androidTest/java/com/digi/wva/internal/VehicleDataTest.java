@@ -36,6 +36,7 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 public class VehicleDataTest extends TestCase {
@@ -132,6 +133,19 @@ public class VehicleDataTest extends TestCase {
         assertEquals(cached.getValue(), resp.getValue());
     }
 
+    public void testUpdateCached_And_GetCached_URI() throws JSONException {
+        assertNull(dut.getCachedDataAtUri("vehicle/ignition"));
+        JSONObject valTimeObject = jFactory.valTimeObj();
+        VehicleDataResponse resp = new VehicleDataResponse(valTimeObject);
+
+        dut.updateCachedVehicleData("vehicle/ignition", resp);
+
+        VehicleDataResponse cached = dut.getCachedDataAtUri("vehicle/ignition");
+        assertNotNull(cached);
+        assertEquals(cached.getTime(), resp.getTime());
+        assertEquals(cached.getValue(), resp.getValue());
+    }
+
     public void testFetchNew() {
         httpClient.success = true;
         httpClient.returnObject = jFactory.vehicleDataEndpoint();
@@ -211,6 +225,54 @@ public class VehicleDataTest extends TestCase {
         assertEquals("Vehicle data endpoint EngineSpeed does not exist.", fail404Cb.error.getMessage());
     }
 
+    public void testSubscribeToUri() throws Exception {
+        PassFailCallback<Void> successCb = new PassFailCallback<Void>(),
+                nonEmptyCb = new PassFailCallback<Void>(),
+                failureCb = new PassFailCallback<Void>(),
+                fail404Cb = new PassFailCallback<Void>();
+
+        // Success
+        httpClient.success = true;
+        httpClient.returnObject = null;
+        dut.subscribeToUri("vehicle/ignition", 10, successCb);
+        assertTrue(successCb.success);
+        assertNull(successCb.error);
+        assertEquals("PUT subscriptions/vehicle~ignition~sub", httpClient.requestSummary);
+        // Verify the request body
+        assertTrue("No subscription key in body", httpClient.requestBody.has("subscription"));
+        JSONObject sub = httpClient.requestBody.getJSONObject("subscription");
+        assertEquals(10, sub.getInt("interval"));
+        assertEquals("vehicle/ignition", sub.getString("uri"));
+
+        // Non-empty body
+        httpClient.success = true;
+        httpClient.returnObject = new JSONObject();
+        dut.subscribeToUri("vehicle/ignition", 10, nonEmptyCb);
+        assertFalse(nonEmptyCb.success);
+        assertNotNull(nonEmptyCb.error);
+        assertEquals("Unexpected response body: {}", nonEmptyCb.error.getMessage());
+
+        // Error
+        httpClient.success = false;
+        httpClient.failWith = new Exception("subscribeToUri Failure");
+        dut.subscribeToUri("vehicle/ignition", 10, failureCb);
+        assertFalse(failureCb.success);
+        assertNotNull(failureCb.error);
+        assertEquals(httpClient.failWith, failureCb.error);
+
+        // 404 error - they're handled specially
+        httpClient.success = false;
+        httpClient.failWith = new WvaHttpException.WvaHttpNotFound("/ws/subscriptions/vehicle~ignition~sub", null);
+        dut.subscribeToUri("vehicle/ignition", 10, fail404Cb);
+        assertFalse(fail404Cb.success);
+        assertNotNull(fail404Cb.error);
+        assertEquals(EndpointUnknownException.class, fail404Cb.error.getClass());
+        assertEquals("URI vehicle/ignition does not exist.", fail404Cb.error.getMessage());
+
+        // Purely for code coverage, since we don't/can't analyze log messages.
+        dut.subscribeToUri("vehicle/data/foo", 10, null);
+    }
+
     public void testUnsubscribe() throws Exception {
         PassFailCallback<Void> successCb = new PassFailCallback<Void>(),
                 nonEmptyCb = new PassFailCallback<Void>(),
@@ -247,6 +309,47 @@ public class VehicleDataTest extends TestCase {
         assertFalse(fail404Cb.success);
         assertNotNull(fail404Cb.error);
         assertEquals(httpClient.failWith, fail404Cb.error);
+    }
+
+    public void testUnsubscribeFromUri() throws Exception {
+        PassFailCallback<Void> successCb = new PassFailCallback<Void>(),
+                nonEmptyCb = new PassFailCallback<Void>(),
+                failureCb = new PassFailCallback<Void>(),
+                fail404Cb = new PassFailCallback<Void>();
+
+        // Success
+        httpClient.success = true;
+        httpClient.returnObject = null;
+        dut.unsubscribeFromUri("vehicle/ignition", successCb);
+        assertTrue(successCb.success);
+        assertNull(successCb.error);
+        assertEquals("DELETE subscriptions/vehicle~ignition~sub", httpClient.requestSummary);
+
+        // Non-empty body
+        httpClient.success = true;
+        httpClient.returnObject = new JSONObject();
+        dut.unsubscribeFromUri("vehicle/ignition", nonEmptyCb);
+        assertFalse(nonEmptyCb.success);
+        assertNotNull(nonEmptyCb.error);
+        assertEquals("Unexpected response body: {}", nonEmptyCb.error.getMessage());
+
+        // Error
+        httpClient.success = false;
+        httpClient.failWith = new Exception("unsubscribeFromUri Failure");
+        dut.unsubscribeFromUri("vehicle/ignition", failureCb);
+        assertFalse(failureCb.success);
+        assertNotNull(failureCb.error);
+        assertEquals(httpClient.failWith, failureCb.error);
+
+        // 404 error - they're handled specially
+        httpClient.failWith = new WvaHttpException.WvaHttpNotFound("subscriptions/vehicle~ignition~sub", "");
+        dut.unsubscribeFromUri("vehicle/ignition", fail404Cb);
+        assertFalse(fail404Cb.success);
+        assertNotNull(fail404Cb.error);
+        assertEquals(httpClient.failWith, fail404Cb.error);
+
+        // Purely for code coverage, since we don't/can't analyze log messages.
+        dut.unsubscribeFromUri("vehicle/data/foo", null);
     }
 
     public void testCreateAlarm() throws Exception {
@@ -296,6 +399,56 @@ public class VehicleDataTest extends TestCase {
         assertEquals("Vehicle data endpoint EngineSpeed does not exist.", fail404Cb.error.getMessage());
     }
 
+    public void testCreateUriAlarm() throws Exception {
+        PassFailCallback<Void> successCb = new PassFailCallback<Void>(),
+                nonEmptyCb = new PassFailCallback<Void>(),
+                failureCb = new PassFailCallback<Void>(),
+                fail404Cb = new PassFailCallback<Void>();
+
+        // Success
+        httpClient.success = true;
+        httpClient.returnObject = null;
+        dut.createUriAlarm("vehicle/ignition", AlarmType.CHANGE, 0, 10, successCb);
+        assertTrue(successCb.success);
+        assertNull(successCb.error);
+        assertEquals("PUT alarms/vehicle~ignition~change", httpClient.requestSummary);
+        // Verify the request body
+        assertTrue("No alarm key in body", httpClient.requestBody.has("alarm"));
+        JSONObject alarm = httpClient.requestBody.getJSONObject("alarm");
+        assertEquals(10, alarm.getInt("interval"));
+        assertEquals("vehicle/ignition", alarm.getString("uri"));
+        assertEquals("change", alarm.getString("type"));
+        assertEquals(0, alarm.getInt("threshold"));
+
+        // Non-empty body
+        httpClient.success = true;
+        httpClient.returnObject = new JSONObject();
+        dut.createUriAlarm("vehicle/ignition", AlarmType.CHANGE, 0, 10, nonEmptyCb);
+        assertFalse(nonEmptyCb.success);
+        assertNotNull(nonEmptyCb.error);
+        assertEquals("Unexpected response body: {}", nonEmptyCb.error.getMessage());
+
+        // Error
+        httpClient.success = false;
+        httpClient.failWith = new Exception("createUriAlarm Failure");
+        dut.createUriAlarm("vehicle/ignition", AlarmType.CHANGE, 0, 10, failureCb);
+        assertFalse(failureCb.success);
+        assertNotNull(failureCb.error);
+        assertEquals(httpClient.failWith, failureCb.error);
+
+        // 404 error - they're handled specially
+        httpClient.success = false;
+        httpClient.failWith = new WvaHttpException.WvaHttpNotFound("/ws/alarms/vehicle~ignition~change", null);
+        dut.createUriAlarm("vehicle/ignition", AlarmType.CHANGE, 0, 10, fail404Cb);
+        assertFalse(fail404Cb.success);
+        assertNotNull(fail404Cb.error);
+        assertEquals(EndpointUnknownException.class, fail404Cb.error.getClass());
+        assertEquals("URI vehicle/ignition does not exist.", fail404Cb.error.getMessage());
+
+        // Purely for code coverage, since we don't/can't analyze log messages.
+        dut.createUriAlarm("vehicle/data/foo", AlarmType.CHANGE, 0, 10, null);
+    }
+
     public void testDeleteAlarm() throws Exception {
         PassFailCallback<Void> successCb = new PassFailCallback<Void>(),
                 nonEmptyCb = new PassFailCallback<Void>(),
@@ -332,6 +485,47 @@ public class VehicleDataTest extends TestCase {
         assertFalse(fail404Cb.success);
         assertNotNull(fail404Cb.error);
         assertEquals(httpClient.failWith, fail404Cb.error);
+    }
+
+    public void testDeleteUriAlarm() throws Exception {
+        PassFailCallback<Void> successCb = new PassFailCallback<Void>(),
+                nonEmptyCb = new PassFailCallback<Void>(),
+                failureCb = new PassFailCallback<Void>(),
+                fail404Cb = new PassFailCallback<Void>();
+
+        // Success
+        httpClient.success = true;
+        httpClient.returnObject = null;
+        dut.deleteUriAlarm("vehicle/ignition", AlarmType.CHANGE, successCb);
+        assertTrue(successCb.success);
+        assertNull(successCb.error);
+        assertEquals("DELETE alarms/vehicle~ignition~change", httpClient.requestSummary);
+
+        // Non-empty body
+        httpClient.success = true;
+        httpClient.returnObject = new JSONObject();
+        dut.deleteUriAlarm("vehicle/ignition", AlarmType.CHANGE, nonEmptyCb);
+        assertFalse(nonEmptyCb.success);
+        assertNotNull(nonEmptyCb.error);
+        assertEquals("Unexpected response body: {}", nonEmptyCb.error.getMessage());
+
+        // Error
+        httpClient.success = false;
+        httpClient.failWith = new Exception("deleteUriAlarm Failure");
+        dut.deleteUriAlarm("vehicle/ignition", AlarmType.CHANGE, failureCb);
+        assertFalse(failureCb.success);
+        assertNotNull(failureCb.error);
+        assertEquals(httpClient.failWith, failureCb.error);
+
+        // 404 error - they're handled specially
+        httpClient.failWith = new WvaHttpException.WvaHttpNotFound("alarms/vehicle~ignition~change", "");
+        dut.deleteUriAlarm("vehicle/ignition", AlarmType.CHANGE, fail404Cb);
+        assertFalse(fail404Cb.success);
+        assertNotNull(fail404Cb.error);
+        assertEquals(httpClient.failWith, fail404Cb.error);
+
+        // Purely for code coverage, since we don't/can't analyze log messages.
+        dut.deleteUriAlarm("vehicle/data/foo", AlarmType.CHANGE, null);
     }
 
     public void testUnsubscribe_old() throws JSONException {
@@ -480,6 +674,63 @@ public class VehicleDataTest extends TestCase {
         dut.notifyListeners(e2);
 
         verify(specificListener).onEvent(e2);
+        verify(allListener).onEvent(e2);
+    }
+
+    public void testListenerPropagation_with_uri() {
+        // Test handling of URI listeners.
+        VehicleDataListener allListener = mock(VehicleDataListener.class);
+        final VehicleDataListener specificListener = mock(VehicleDataListener.class);
+
+        // Ensure the callbacks are not pushed off onto the UI thread, so that we don't
+        // need to await their calls in order to test.
+        doReturn(false).when(allListener).runsOnUiThread();
+        doReturn(false).when(specificListener).runsOnUiThread();
+
+        dut.setVehicleDataListener(allListener);
+        dut.setUriListener("vehicle/ignition", specificListener);
+
+        final VehicleDataEvent e1 = new VehicleDataEvent(
+                EventFactory.Type.SUBSCRIPTION, "something/else/entirely", "entirely",
+                DateTime.now().toDateTime(DateTimeZone.UTC), "something~else~entirely~sub", null);
+        final VehicleDataEvent e2 = new VehicleDataEvent(
+                EventFactory.Type.SUBSCRIPTION, "vehicle/ignition", "ignition",
+                DateTime.now().toDateTime(DateTimeZone.UTC), "vehicle~ignition~sub", null);
+
+        dut.notifyListeners(e1);
+
+        // e1 is not for ignition, so we shouldn't trigger the ignition listener.
+        // But we should trigger the catch-all listener.
+        verify(allListener).onEvent(e1);
+        verify(specificListener, never()).onEvent(any(VehicleDataEvent.class));
+
+        reset(allListener);
+
+        // Set up to test call order.
+        doAnswer(new Answer() {
+            @Override
+            public Object answer(InvocationOnMock invocationOnMock) throws Throwable {
+                // Specific listener must be called first.
+                verify(specificListener).onEvent(e2);
+                return null;
+            }
+        }).when(allListener).onEvent(e2);
+
+        dut.notifyListeners(e2);
+
+        verify(specificListener).onEvent(e2);
+        verify(allListener).onEvent(e2);
+
+        reset(specificListener);
+        reset(allListener);
+        // And if we remove the URI-specific listener, we still call the catch-all.
+        dut.removeUriListener("vehicle/ignition");
+
+        dut.notifyListeners(e1);
+        dut.notifyListeners(e2);
+
+        verify(specificListener, never()).onEvent(any(VehicleDataEvent.class));
+        verify(allListener).onEvent(e1);
         verify(allListener).onEvent(e2);
     }
 
