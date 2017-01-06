@@ -11,6 +11,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 import android.util.Pair;
+import android.widget.TextView;
 
 import com.digi.wva.async.AlarmType;
 import com.digi.wva.async.EventChannelStateListener;

@@ -54,8 +54,8 @@ public class FaultCodesIntegrationTest extends IntegrationTestCase {
         RecordedRequest record = ws.takeRequest();
         assertEquals("PUT", record.getMethod());
         assertEquals("/ws/subscriptions/can0_active~ecu0~dtcsub", record.getPath());
-        JSONObject body = new JSONObject(record.getUtf8Body());
-
+        //JSONObject body = new JSONObject(record.getUtf8Body());
+        JSONObject body = new JSONObject(record.getBody().readUtf8());
         // Verify body contents
         JSONObject subscription = body.getJSONObject("subscription");
         assertEquals("vehicle/dtc/can0_active/ecu0", subscription.getString("uri"));

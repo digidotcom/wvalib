@@ -57,20 +57,13 @@ following line to the `dependencies` section of your `build.gradle` file:
 
     compile 'com.digi.wva:wvalib:2.0+'
 
-### Adding to an Eclipse project
-
-Before you can build the library you must point to the location of the
-Android SDK by setting your `ANDROID_HOME` environment variable or
-creating a `local.properties` file and setting the `sdk.dir` property.
-
-Next, navigate to the root directory of this repository and run
-`./gradlew makeEclipseProject` (or `.\gradlew.bat makeEclipseProject` on
-Windows). This will create a new Eclipse project under
-`wvalib/build/outputs/eclipse-project` which can then be imported into your
-Eclipse installation.
 
 ### Compiling the library yourself
 
+It is recommended that you import the project into Android Stuio v2.2 or
+above.
+
+From the command line
 Before you can build the library you must point to the location of the
 Android SDK by setting your `ANDROID_HOME` environment variable or
 creating a `local.properties` file and setting the `sdk.dir` property.
@@ -90,8 +83,6 @@ Additional tasks added in `build.gradle`:
   - `generate<variant>Jar`: Package class files in a JAR. This allows
     us to distribute a JAR rather than an AAR, as the library requires
     no Android resources.
-  - `makeEclipseProject`: Create an Android project for import into
-    Eclipse
 
 [plugin]: http://tools.android.com/tech-docs/new-build-system/user-guide
 

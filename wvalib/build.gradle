@@ -1,15 +1,15 @@
+import groovy.io.FileType
 buildscript {
     dependencies {
-        classpath 'com.github.dcendents:android-maven-gradle-plugin:1.3'
         classpath 'org.apache.maven.wagon:wagon-http:2.2'
+
     }
     // Based on https://github.com/Netflix/gradle-template build.gradle
     apply from: file('../gradle/buildscript.gradle'), to: buildscript
 }
-
 apply plugin: 'com.android.library'
 apply plugin: 'maven'
-apply plugin: 'com.github.dcendents.android-maven'
+
 
 // High-level project settings
 project.ext {
@@ -23,50 +23,66 @@ project.ext {
     versionSuffix = isRelease ? "" : "-SNAPSHOT"
 
     maven = [
-        repo: isRelease ? mavenReleases : mavenSnapshots,
-        username: isRelease ? mavenReleasesUsername : mavenSnapshotsUsername,
-        password: isRelease ? mavenReleasesPassword : mavenSnapshotsPassword
+            repo    : isRelease ? mavenReleases : mavenSnapshots,
+            username: isRelease ? mavenReleasesUsername : mavenSnapshotsUsername,
+            password: isRelease ? mavenReleasesPassword : mavenSnapshotsPassword
     ]
 }
-
-import groovy.io.FileType
-
-version '2.1.0.rc2' + versionSuffix
+version '2.2.0-rc1' + versionSuffix
 group 'com.digi.wva'
-
 dependencies {
-    compile 'com.squareup.okio:okio:1.1.0'
-    compile 'com.squareup.okhttp:okhttp:2.0.0'
+    //compile fileTree(include: '*.jar', dir: 'libs')
+    compile ('com.android.support:appcompat-v7:25.0.0')
+    compile 'com.squareup.okhttp:okhttp:2.7.5'
+    compile 'com.squareup.okio:okio:1.11.0'
+    compile ('com.google.dexmaker:dexmaker:1.2')
     compile 'joda-time:joda-time:2.2'
-
+    compile 'com.android.support:multidex:1.0.1'
     // Testing dependencies
-    androidTestCompile 'com.google.dexmaker:dexmaker:1.2'
-    androidTestCompile 'com.google.dexmaker:dexmaker-mockito:1.2'
-    androidTestCompile files('libs/mockwebserver-2.0.0.jar')
+    androidTestCompile ('com.squareup.okhttp:mockwebserver:2.7.5')
+            {
+                exclude group: 'org.hamcrest'
+                //exclude group: 'org.mockito'
+            }
+    androidTestCompile ('org.mockito:mockito-all:1.9.5') {
+        exclude module: 'objenesis'
+        exclude group: 'org.hamcrest'
+    }
+    androidTestCompile ('com.google.dexmaker:dexmaker-mockito:1.2')
+            {
+                exclude module: 'objenesis'
+                exclude group: 'org.hamcrest'
+                exclude group: 'org.mockito'
+            }
 }
-
 android {
-    compileSdkVersion 23
-    buildToolsVersion "23.0.3"
-
-    compileOptions.incremental = false
+    compileSdkVersion 25
+    buildToolsVersion '25.0.0'
 
     defaultConfig {
-        minSdkVersion 9
-        targetSdkVersion 23
+        minSdkVersion 18
+        targetSdkVersion 25
 
         testApplicationId "com.digi.wva.test"
         testInstrumentationRunner "com.digi.wva.WVATestRunner"
         testHandleProfiling true
         testFunctionalTest true
+        // Enabling multidex support.
+        multiDexEnabled true
     }
-
     // Don't publish the AAR file for this library. (The JAR is sufficient.)
     // TODO: Setting this to null causes an NPE in the Android library plugin 2.0.0.
     // defaultPublishConfig null
-
     buildTypes.debug {
         testCoverageEnabled true
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'),
+                    'proguard-rules.pro'
+        }
     }
 
     libraryVariants.all { variant ->
@@ -79,13 +95,13 @@ android {
         String jarTask = "${taskName}Jar"
 
         def doclinks = [
-            "http://docs.oracle.com/javase/7/docs/api/", // Java APIs,
-            "http://square.github.io/okhttp/javadoc/",   // OkHttp docs,
-            "http://www.json.org/javadoc/",              // org.json docs
-            "http://joda-time.sourceforge.net/apidocs/"  // JodaTime docs
+                "http://docs.oracle.com/javase/7/docs/api/", // Java APIs,
+                "http://square.github.io/okhttp/2.x/okhttp/",   // OkHttp docs,
+                "http://stleary.github.io/JSON-java/", // org.json docs
+                "http://joda-time.sourceforge.net/apidocs/"  // JodaTime docs
         ];
 
-        task (taskName, type: Javadoc) {
+        task(taskName, type: Javadoc) {
             description "Generate Javadoc for $variant.name"
             source = fileTree('src/main/java').matching {
                 include '**/*.java'
@@ -113,7 +129,7 @@ android {
             exclude '**/R.java'
 
             options.use true
-            
+
             // JDK 8 Javadoc is very strict, and our docs are not formatted the greatest.
             // Disable doclint for now.
             options.addStringOption('Xdoclint:none', '-quiet')
@@ -123,20 +139,39 @@ android {
                 // http://stackoverflow.com/a/3954639 (recursively finding files)
                 // http://blog.davidehringer.com/groovy/processing-files-place-groovy/
 
-                destinationDir.eachFileRecurse (FileType.FILES) { file ->
+                destinationDir.eachFileRecurse(FileType.FILES) { file ->
                     if (file.name.endsWith(".html")) { // Only edit html files
                         def text = file.text
                         file.write(text.replaceAll("href=\"(.+)is-external=true\"") {
-                            Object[] match -> "href=\"${match[1]}is-external=true\" target=\"_blank\""})
+                            Object[] match -> "href=\"${match[1]}is-external=true\" target=\"_blank\""
+                        })
                     }
                 }
+            }
+        }
+        /**
+        task listJars {
+            doLast {
+                configurations.compile.each { File file -> println file.name }
+            }
+        }
+        **/
+        task list(dependsOn: configurations.compile) {
+            doLast {
+                println "classpath = ${configurations.compile.collect { File file -> file.name }}"
+                //classpath += ${configurations.compile.collect { File file -> file.name }}
             }
         }
 
         task(jarTask, type: Jar, dependsOn: "${taskName}") {
             classifier = 'javadoc'
             from tasks."${taskName}".destinationDir
-
+            manifest {
+                attributes(
+                        "Manifest-Version": "1.0",
+                        "Class-Path": configurations.compile.collect { it.getName() }.join(' ')
+                )
+            }
             artifacts {
                 // Add the Javadocs to the artifacts list.
                 archives tasks."${jarTask}"
@@ -146,7 +181,12 @@ android {
         task("generate${variantName}SourcesJar", type: Jar, dependsOn: variant.javaCompile) {
             classifier = 'sources'
             from variant.javaCompile.source
-
+            manifest {
+                attributes(
+                        "Manifest-Version": "1.0",
+                        "Class-Path": configurations.compile.collect { it.getName() }.join(' ')
+                )
+            }
             artifacts {
                 archives tasks."generate${variantName}SourcesJar"
             }
@@ -154,14 +194,20 @@ android {
 
         task("generate${variantName}Jar", type: Jar, dependsOn: variant.javaCompile) {
             from variant.javaCompile.destinationDir
-
+            manifest {
+                attributes(
+                        "Manifest-Version": "1.0",
+                        'Implementation-Title': 'wvalib',
+                        "Class-Path": configurations.compile.collect { it.getName() }.join(' ')
+                )
+            }
             artifacts {
                 archives tasks."generate${variantName}Jar"
             }
         }
     }
 }
-
+/** Eclipse is not longer supported by Android as a development platform
 task makeEclipseProject(type: Copy) {
     destinationDir = new File("$project.buildDir/outputs/eclipse-project")
 
@@ -169,10 +215,10 @@ task makeEclipseProject(type: Copy) {
         destinationDir.mkdirs()
     }
 
-    from ('src/main') {
+    from('src/main') {
         include 'AndroidManifest.xml'
     }
-    from (project.projectDir) {
+    from(project.projectDir) {
         include 'lint.xml'
         include 'proguard-project.txt'
         include 'project.properties'
@@ -180,45 +226,45 @@ task makeEclipseProject(type: Copy) {
     // Copy static pre-generated files
     from '../gradle/assets/eclipse-project'
 
-    into ("src") {
+    into("src") {
         from 'src/main/java'
     }
 
-    into ("libs") {
+    into("libs") {
         from 'libs'
     }
 }
-
+ **/
 uploadArchives {
-  repositories {
-    mavenDeployer {
-      // Edit gradle.properties to specify the repository and
-      // authentication for the releases and snapshots repositories.
-      //
-      // Specify the 'release' property either in gradle.properties or on
-      // the command-line (gradle -P release :wvalib:clean :wvalib:uploadArchives) to
-      // upload to the releases repository - otherwise, the snapshots
-      // repository will be used.
-      repository(url: project.maven.repo) {
-        authentication(userName: project.maven.username, password: project.maven.password)
-      }
+    repositories {
+        mavenDeployer {
+            // Edit gradle.properties to specify the repository and
+            // authentication for the releases and snapshots repositories.
+            //
+            // Specify the 'release' property either in gradle.properties or on
+            // the command-line (gradle -P release :wvalib:clean :wvalib:uploadArchives) to
+            // upload to the releases repository - otherwise, the snapshots
+            // repository will be used.
+            repository(url: project.maven.repo) {
+                authentication(userName: project.maven.username, password: project.maven.password)
+            }
 
-      pom.project {
-        name 'WVA Android Library'
-        artifactId 'wvalib'
-        packaging 'jar'
-        organization {
-          name 'Digi International, Inc.'
-          url 'http://www.digi.com'
+            pom.project {
+                name 'WVA Android Library'
+                artifactId 'wvalib'
+                packaging 'jar'
+                organization {
+                    name 'Digi International, Inc.'
+                    url 'http://www.digi.com'
+                }
+                licenses {
+                    license {
+                        name "Mozilla Public License 2.0"
+                        url 'http://mozilla.org/MPL/2.0'
+                        distribution 'repo'
+                    }
+                }
+            }
         }
-        licenses {
-          license {
-            name "Mozilla Public License 2.0"
-            url 'http://mozilla.org/MPL/2.0'
-            distribution 'repo'
-          }
-        }
-      }
     }
-  }
 }

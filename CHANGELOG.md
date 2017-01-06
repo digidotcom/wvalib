@@ -1,3 +1,12 @@
+# 2.2.0.rc1
+
+**Improvements/new features**
+
+  * Update build scripts to be compatible with Android Studio 2.2 and the latest Android SDK build
+    tools.
+  * Removed support for Eclipse due to Google no longer supporting Android builds with Eclipse.
+  * Updatred JavaDoc URLs
+
 # 2.1.0.rc2
 
 **Improvements/new features**

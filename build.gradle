@@ -1,3 +1,27 @@
+buildscript {
+    repositories {
+// jcenter() is a superset of mavenCentral(), it uses HTTPs to serve content, it is faster than mavenCentral() //
+        jcenter()
+    }
+//This file relies on the jcenter repository.//
+    dependencies {
+
+        //classpath 'com.android.tools.build:gradle:1.5.0'
+        //classpath 'com.android.tools.build:gradle:2.2.2'
+
+
+// NOTE: Do not place your application dependencies here; they belong
+// in the individual module build.gradle files
+    }
+}
 allprojects {
     apply from: file(rootDir.absolutePath + '/gradle/repositories.gradle')
+    repositories {
+        jcenter()
+    }
+}
+
+//Application depends on the jCenter repository.//
+task clean(type: Delete) {
+    delete rootProject.buildDir
 }

@@ -417,7 +417,7 @@ public class HttpClient {
      * @param callback a callback for when the request completes or is in error
      */
     public void post(String url, JSONObject obj, HttpCallback callback) {
-        Request request = this.makeBuilder(url).post(this.makeBody(obj)).build();
+        Request request = this.makeBuilder(url).method("POST", this.makeBody(obj)).build();
         logRequest(request);
         client.newCall(request).enqueue(wrapCallback(callback));
     }
