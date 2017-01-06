@@ -173,9 +173,10 @@ public class HttpClient {
 
 	public class TLSSocketFactory extends SSLSocketFactory {
 		private SSLSocketFactory internalSSLSocketFactory;
+		private String supportedProtocol;
 
-		public TLSSocketFactory() throws KeyManagementException, NoSuchAlgorithmException {
-			SSLContext context = SSLContext.getInstance("TLS");
+		public TLSSocketFactory(String protocol) throws KeyManagementException, NoSuchAlgorithmException {
+			SSLContext context = SSLContext.getInstance(protocol);
             context.init(null, new X509TrustManager[]{new X509TrustManager() {
                 @Override
                 public X509Certificate[] getAcceptedIssuers() {
@@ -193,6 +194,7 @@ public class HttpClient {
                 }
             }}, null);
 			internalSSLSocketFactory = context.getSocketFactory();
+			supportedProtocol = protocol;
 		}
 
 		@Override
@@ -232,7 +234,7 @@ public class HttpClient {
 
 		private Socket enableTLSOnSocket(Socket socket) {
 			if(socket != null && (socket instanceof SSLSocket)) {
-				((SSLSocket)socket).setEnabledProtocols(new String[] {"TLSv1.2"});
+				((SSLSocket)socket).setEnabledProtocols(new String[] { supportedProtocol });
 			}
 			return socket;
 		}
@@ -247,7 +249,9 @@ public class HttpClient {
 		SSLSocketFactory factory = null;
 
 		try {
-			factory = new TLSSocketFactory();
+			// Enable TLSv1.2 protocol only if the Android API is 16+, otherwise use TLSv1.
+			int currentAPIVersion = android.os.Build.VERSION.SDK_INT;
+			factory = (currentAPIVersion >= android.os.Build.VERSION_CODES.JELLY_BEAN) ? new TLSSocketFactory("TLSv1.2") : new TLSSocketFactory("TLSv1");
 		} catch (NoSuchAlgorithmException e) {
 		} catch (KeyManagementException e) {
 		}
