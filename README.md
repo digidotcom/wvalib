@@ -68,6 +68,10 @@ Before you can build the library you must point to the location of the
 Android SDK by setting your `ANDROID_HOME` environment variable or
 creating a `local.properties` file and setting the `sdk.dir` property.
 
+To import this library into an existing Android Gradle setup, add 
+`compile 'com.digi.wva:wvalib:2.0+'` to your `build.gradle`.
+
+
 Usage
 -----
 
