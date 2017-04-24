@@ -5,7 +5,9 @@
   * Update build scripts to be compatible with Android Studio 2.2 and the latest Android SDK build
     tools.
   * Removed support for Eclipse due to Google no longer supporting Android builds with Eclipse.
-  * Updatred JavaDoc URLs
+  * Removed Device Cloud support due to the API no longer being updated to support new Android SDK. 
+  * Updated JavaDoc URLs
+ 
 
 # 2.1.0.rc2
 
