@@ -25,6 +25,7 @@ import com.digi.wva.internal.Ecus;
 import com.digi.wva.internal.EventChannel;
 import com.digi.wva.internal.EventDispatcher;
 import com.digi.wva.internal.FaultCodes;
+import com.digi.wva.internal.Files;
 import com.digi.wva.internal.Hardware;
 import com.digi.wva.internal.HttpClient;
 import com.digi.wva.internal.HttpClient.ExpectEmptyCallback;
@@ -36,6 +37,7 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.File;
 import java.net.Inet4Address;
 import java.util.Set;
 
@@ -176,6 +178,7 @@ public class WVA {
     private Hardware hardware;
     private Ecus ecus;
     private FaultCodes faultCodes;
+    private Files files;
 
     private HttpClient httpClient;
     private EventChannel eventChannel;
@@ -196,7 +199,7 @@ public class WVA {
      * @return the WVA
      */
     static WVA getDevice(String hostname, HttpClient client, VehicleData vehicleData,
-                                   Ecus ecus, Hardware hw, FaultCodes fc) {
+                         Ecus ecus, Hardware hw, FaultCodes fc, Files files) {
         WVA dev = new WVA();
         dev.hostname = hostname;
         dev.httpClient = ((client != null)  ? client  : new HttpClient(hostname));
@@ -204,6 +207,7 @@ public class WVA {
         dev.ecus       = ((ecus != null)     ? ecus : new Ecus(client));
         dev.hardware   = ((hw != null)      ? hw      : new Hardware(client));
         dev.faultCodes = ((fc != null)      ? fc      : new FaultCodes(client));
+        dev.files      = ((files != null)   ? files   : new Files(client));
 
         return dev;
     }
@@ -225,6 +229,7 @@ public class WVA {
         this.ecus = new Ecus(httpClient);
         this.hardware = new Hardware(httpClient);
         this.faultCodes = new FaultCodes(httpClient);
+        this.files = new Files(httpClient);
     }
 
     /**
@@ -731,6 +736,23 @@ public class WVA {
                 }
             }
         });
+    }
+
+
+    /**
+     * If the named file does not yet exist, adds a new file (with the requested URI) to the system.
+     * If the requested file already exists in the system, changes the existing file.
+     * The payload of the PUT command become the contents of the file.
+     *
+     * @param volume should be either userfs or a USB flash drive name.
+     * @param path refers to a directory in this system, and is constructed from a list of directory
+     *            names separated by a /, indicating a specific location within the directory tree.
+     * @param rawBody The payload of the PUT command, becomes the contents of the file.
+     * @param wvaCallback callback to give feedback on whether the subscription call succeeds or not
+     */
+    public void updateFile(final String volume, final String path, final String rawBody,
+                           final WvaCallback<Void> wvaCallback) {
+        files.updateFile(volume, path, rawBody, wvaCallback);
     }
 
     /**

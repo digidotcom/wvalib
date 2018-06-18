@@ -149,6 +149,7 @@ public class HttpClient {
 
     private static final String TAG = "wvalib HttpClient";
     private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
+    private static final MediaType PLAIN_TEXT = MediaType.parse("text/plain; charset=utf-8");
 
     /**
      * Provides the basic format of a WVA web service resource.
@@ -327,6 +328,22 @@ public class HttpClient {
     }
 
     /**
+     * Converts raw content to be used as a plain text request body.
+     *
+     * <p>This method is protected, rather than private, due to a bug between JaCoCo and
+     * the Android build tools which causes the instrumented bytecode to be invalid when this
+     * method is private:
+     * <a href="http://stackoverflow.com/questions/17603192/dalvik-transformation-using-wrong-invoke-opcode" target="_blank">see StackOverflow question.</a>
+     * </p>
+     *
+     * @param content the raw content data to be used
+     * @return the request body
+     */
+    protected RequestBody makePlainTextBody(String content) {
+        return RequestBody.create(PLAIN_TEXT, content);
+    }
+
+    /**
      * Wrap an HttpCallback in an OkHttp {@link Callback} instance.
      * Also will automatically attempt to parse the response as JSON.
      *
@@ -432,6 +449,20 @@ public class HttpClient {
      */
     public void put(String url, JSONObject obj, HttpCallback callback) {
         Request request = this.makeBuilder(url).put(this.makeBody(obj)).build();
+        logRequest(request);
+        client.newCall(request).enqueue(wrapCallback(callback));
+    }
+
+    /**
+     * Asynchronously perform an HTTP PUT request on the given path,
+     * with the given content data.
+     *
+     * @param url the path, relative to {@code /ws/}, on which to perform a PUT request
+     * @param content the raw content string to PUT to the device
+     * @param callback a callback for when the request completes or is in error
+     */
+    public void put(String url, String content, HttpCallback callback) {
+        Request request = this.makeBuilder(url).put(this.makePlainTextBody(content)).build();
         logRequest(request);
         client.newCall(request).enqueue(wrapCallback(callback));
     }

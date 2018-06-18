@@ -61,6 +61,12 @@ public class HttpClientSpoofer extends HttpClient {
     }
 
     @Override
+    public void put(String url, String content, HttpCallback responseHandler) {
+        requestBody = null;
+        spoof(responseHandler, "PUT " + url);
+    }
+
+    @Override
     public void delete(String url, HttpCallback responseHandler) {
         spoof(responseHandler, "DELETE " + url);
     }

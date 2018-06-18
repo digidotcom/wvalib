@@ -19,6 +19,7 @@ import com.digi.wva.async.WvaCallback;
 import com.digi.wva.exc.WvaHttpException;
 import com.digi.wva.internal.Ecus;
 import com.digi.wva.internal.FaultCodes;
+import com.digi.wva.internal.Files;
 import com.digi.wva.internal.Hardware;
 import com.digi.wva.internal.HttpClient;
 import com.digi.wva.internal.VehicleData;
@@ -64,6 +65,7 @@ public class WVATest extends TestCase {
     WvaCallback<Set<String>> mCbSet = mock(WvaCallback.class);
     VehicleDataListener mListener = mock(VehicleDataListener.class);
     FaultCodeListener mFListener = mock(FaultCodeListener.class);
+    Files mFiles = mock(Files.class);
 
     // Spies
     VehicleData vehSpy = null;
@@ -77,11 +79,11 @@ public class WVATest extends TestCase {
 
     protected void setUp() throws Exception {
         normalWva = new WVA(hostname);
-        mockedWVA = WVA.getDevice(hostname, httpClient, mVeh, mEcus, mHw, mFc);
+        mockedWVA = WVA.getDevice(hostname, httpClient, mVeh, mEcus, mHw, mFc, mFiles);
 
         VehicleData mVeh2 = new VehicleData(httpClient);
         vehSpy = spy(mVeh2);
-        mockedWvaVehicleSpy = WVA.getDevice(hostname, httpClient, vehSpy, mEcus, mHw, mFc);
+        mockedWvaVehicleSpy = WVA.getDevice(hostname, httpClient, vehSpy, mEcus, mHw, mFc, mFiles);
 
         super.setUp();
     }
@@ -105,7 +107,7 @@ public class WVATest extends TestCase {
 
     public void testBasicAuthMethods() {
         HttpClient mockHttp = mock(HttpClient.class);
-        WVA mock = WVA.getDevice(hostname, mockHttp, vehSpy, mEcus, mHw, mFc);
+        WVA mock = WVA.getDevice(hostname, mockHttp, vehSpy, mEcus, mHw, mFc, mFiles);
 
         mock.useBasicAuth("foo", "bar");
         verify(mockHttp).useBasicAuth("foo", "bar");
@@ -116,7 +118,7 @@ public class WVATest extends TestCase {
 
     public void testHttpPortMethods() {
         HttpClient mockHttp = mock(HttpClient.class);
-        WVA mock = WVA.getDevice(hostname, mockHttp, vehSpy, mEcus, mHw, mFc);
+        WVA mock = WVA.getDevice(hostname, mockHttp, vehSpy, mEcus, mHw, mFc, mFiles);
 
         mock.useSecureHttp(true);
         verify(mockHttp).useSecureHttp(true);
@@ -131,7 +133,7 @@ public class WVATest extends TestCase {
 
     public void testHttpLoggingMethods() {
         HttpClient mockHttp = mock(HttpClient.class);
-        WVA mock = WVA.getDevice(hostname, mockHttp, vehSpy, mEcus, mHw, mFc);
+        WVA mock = WVA.getDevice(hostname, mockHttp, vehSpy, mEcus, mHw, mFc, mFiles);
 
         // Check that getHttpLoggingEnabled returns the HTTP client's value.
         // First with logging enabled...
@@ -412,11 +414,11 @@ public class WVATest extends TestCase {
 
     public void testUriDelete() throws Exception {
         PassFailCallback<Void> successCb = new PassFailCallback<Void>() {
-                    @Override
-                    public boolean runsOnUiThread() {
-                        return false;
-                    }
-                },
+            @Override
+            public boolean runsOnUiThread() {
+                return false;
+            }
+        },
                 nonEmptyCb = new PassFailCallback<Void>() {
                     @Override
                     public boolean runsOnUiThread() {
@@ -453,6 +455,11 @@ public class WVATest extends TestCase {
         assertFalse(failureCb.success);
         assertNotNull(failureCb.error);
         assertEquals(httpClient.failWith, failureCb.error);
+    }
+
+    public void testUpdateFile() {
+        mockedWVA.updateFile("volume", "path", "content", null);
+        verify(mFiles).updateFile("volume", "path", "content", null);
     }
 
     public void testFetchVehicleDataEndpoints() throws Exception {
@@ -578,7 +585,7 @@ public class WVATest extends TestCase {
         } catch (NullPointerException e) {
             // The exception should point the user to removeVehicleDataListener
             assertTrue("No mention of removeVehicleDataListener in '" + e.getMessage() + "'",
-                       e.getMessage().contains("removeVehicleDataListener"));
+                    e.getMessage().contains("removeVehicleDataListener"));
 
             verify(mVeh, never()).setVehicleDataListener("EngineSpeed", null);
         }
